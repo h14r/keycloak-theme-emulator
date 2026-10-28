@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Keycloak Theme Emulator</title>
+  <link rel="stylesheet" href="/ui/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">◧</span>
+      <strong>Keycloak Theme Emulator</strong>
+      <span class="badge" id="kcVersion" title="Version der eingebundenen Keycloak-Klassen">Keycloak …</span>
+    </div>
+    <div class="topbar-actions">
+      <label class="switch" title="Lädt die Vorschau neu, sobald sich eine Datei im Theme-Ordner ändert">
+        <input type="checkbox" id="liveReload" checked> Live-Neuladen
+      </label>
+      <button type="button" id="btnScenario">Szenario</button>
+      <button type="button" id="btnAudit" class="primary">Gesamtes Theme prüfen</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="sidebar" aria-label="Seiten und E-Mails">
+      <div class="seg" role="tablist">
+        <button type="button" role="tab" id="tabPages" aria-selected="true">Formularseiten</button>
+        <button type="button" role="tab" id="tabMails" aria-selected="false">E-Mails</button>
+      </div>
+      <input type="search" id="filter" placeholder="Filtern …" aria-label="Liste filtern">
+      <div id="list" class="list"></div>
+      <p class="muted small" id="themesDir"></p>
+    </nav>
+
+    <main class="main">
+      <div class="toolbar">
+        <label>Theme <select id="theme"></select></label>
+        <label id="variantWrap">Variante <select id="variant"></select></label>
+        <label>Sprache <select id="locale"></select></label>
+        <div class="seg small" id="viewports" role="group" aria-label="Bildschirmbreite">
+          <button type="button" data-w="375">Mobil</button>
+          <button type="button" data-w="768">Tablet</button>
+          <button type="button" data-w="1280" class="on">Desktop</button>
+          <button type="button" data-w="0">Voll</button>
+        </div>
+        <label class="switch"><input type="checkbox" id="compare"> Vergleich mit</label>
+        <select id="theme2" disabled></select>
+        <button type="button" id="reload" title="Neu rendern">↻</button>
+        <a id="openRaw" target="_blank" rel="noopener" class="small">roh öffnen ↗</a>
+      </div>
+
+      <div class="mailhead" id="mailHead" hidden>
+        <dl>
+          <dt>Betreff</dt><dd id="mSubject"></dd>
+          <dt>Von</dt><dd id="mFrom"></dd>
+          <dt>An</dt><dd id="mTo"></dd>
+          <dt>Größe HTML</dt><dd id="mSize"></dd>
+        </dl>
+        <div class="seg small" role="tablist" id="mailParts">
+          <button type="button" data-part="html" class="on">HTML</button>
+          <button type="button" data-part="text">Text</button>
+        </div>
+      </div>
+
+      <div class="stage" id="stage">
+        <figure class="frame">
+          <figcaption id="cap1"></figcaption>
+          <div class="viewport" id="vp1"><iframe id="f1" title="Vorschau"></iframe></div>
+        </figure>
+        <figure class="frame" id="frame2" hidden>
+          <figcaption id="cap2"></figcaption>
+          <div class="viewport" id="vp2"><iframe id="f2" title="Vergleichsvorschau"></iframe></div>
+        </figure>
+      </div>
+    </main>
+
+    <aside class="panel" aria-label="Bewertung">
+      <section>
+        <h2>Bewertung</h2>
+        <p class="muted small" id="trigger"></p>
+        <div class="counts" id="counts"></div>
+        <ul class="findings" id="findings"></ul>
+        <div class="row">
+          <button type="button" id="btnA11y">Barrierefreiheit prüfen (axe-core)</button>
+        </div>
+        <ul class="findings" id="a11y"></ul>
+      </section>
+      <section>
+        <h2>Theme-Kette</h2>
+        <p class="muted small">Auflösung wie im Server: Theme → import → parent → …</p>
+        <ol class="chain" id="chain"></ol>
+      </section>
+      <details>
+        <summary>Template-Variablen &amp; Textschlüssel</summary>
+        <div id="model" class="small"></div>
+      </details>
+    </aside>
+  </div>
+
+  <dialog id="dlgScenario">
+    <form method="dialog" class="dlg">
+      <h2>Szenario – simulierte Realm-Einstellungen</h2>
+      <p class="muted small">Entspricht den Einstellungen in der Admin-Konsole. Änderungen gelten sofort für alle Vorschauen.</p>
+      <div class="grid" id="flags"></div>
+      <label class="block">Vollständiges Szenario (JSON)
+        <textarea id="scenarioJson" rows="16" spellcheck="false"></textarea>
+      </label>
+      <p class="error small" id="scenarioErr"></p>
+      <div class="row end">
+        <button value="cancel">Schließen</button>
+        <button type="button" id="scApply">Übernehmen</button>
+        <button type="button" id="scSave" class="primary">Übernehmen &amp; in scenario.json speichern</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlgAudit">
+    <div class="dlg wide">
+      <h2>Prüfung des gesamten Themes</h2>
+      <p class="muted small" id="auditInfo"></p>
+      <label class="switch"><input type="checkbox" id="auditA11y" checked> inkl. Barrierefreiheit (langsamer)</label>
+      <div class="row">
+        <button type="button" id="auditRun" class="primary">Starten</button>
+        <button type="button" id="auditDownload" disabled>Bericht (Markdown) herunterladen</button>
+        <button type="button" id="auditClose">Schließen</button>
+      </div>
+      <progress id="auditProgress" value="0" max="1" hidden></progress>
+      <table class="audit" id="auditTable"></table>
+      <iframe id="auditFrame" title="Prüf-Rendering" class="offscreen"></iframe>
+    </div>
+  </dialog>
+
+  <script src="/ui/app.js"></script>
+</body>
+</html>

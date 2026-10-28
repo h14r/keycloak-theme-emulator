@@ -1,0 +1,437 @@
+# Keycloak Theme Emulator
+
+Lokale Vorschau- und Prüfumgebung für **Login-Themes** (Formularseiten rund um
+Anmeldung, Registrierung, Passwort, Profil) und **E-Mail-Themes** von Keycloak –
+ohne Zugang zu einem Keycloak-Server.
+
+Neue Designs lassen sich damit entwickeln, in allen Seitenzuständen ansehen,
+mit dem Original-Theme vergleichen, prüfen (Template-Fehler, fehlende Texte,
+fehlende Dateien, Barrierefreiheit, Mail-Tauglichkeit) und als Bericht
+festhalten.
+
+---
+
+## Inhalt
+
+- [Installation auf dem Mac (.dmg)](#installation-auf-dem-mac-dmg)
+- [Ohne Installation im Browser (portables ZIP)](#ohne-installation-im-browser-portables-zip)
+- [Schnellstart](#schnellstart)
+- [So funktioniert es](#so-funktioniert-es)
+- [Was echt ist und was simuliert wird](#was-echt-ist-und-was-simuliert-wird)
+- [Oberfläche](#oberfläche)
+- [Abgedeckte Seiten und E-Mails](#abgedeckte-seiten-und-e-mails)
+- [Prüfungen](#prüfungen)
+- [Szenario (simulierte Realm-Einstellungen)](#szenario-simulierte-realm-einstellungen)
+- [Eigenes Theme anlegen](#eigenes-theme-anlegen)
+- [Prüfung auf der Kommandozeile (CI)](#prüfung-auf-der-kommandozeile-ci)
+- [Keycloak-Version wechseln](#keycloak-version-wechseln)
+- [Grenzen](#grenzen)
+
+---
+
+## Installation auf dem Mac (.dmg)
+
+Die App bringt ihre eigene Java-Laufzeit mit – Java oder Maven sind dafür
+nicht nötig.
+
+**Herunterladen** (ohne GitHub-Anmeldung):
+<https://github.com/h14r/keycloak-theme-emulator/releases/latest>
+
+- `Keycloak-Theme-Emulator-<version>-arm64.dmg` – Apple Silicon (M1–M4)
+- `Keycloak-Theme-Emulator-<version>-x64.dmg` – Intel-Mac
+
+Die Dateien entstehen über GitHub Actions (Workflow „Pakete (.dmg und
+portable ZIP)“); ein Tag `v<version>` legt automatisch ein Release an.
+
+Welcher Prozessor im Mac steckt, steht unter  → *Über diesen Mac*
+(„Chip Apple …“ = arm64, „Prozessor Intel …“ = x64).
+
+**Installieren ohne Sicherheitswarnung (empfohlen):** Im Terminal
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/h14r/keycloak-theme-emulator/main/install-mac.sh | bash
+```
+
+Das Skript ([install-mac.sh](./install-mac.sh)) lädt die passende `.dmg`
+(Apple Silicon oder Intel) aus dem neuesten Release, kopiert die App nach
+*Programme* und startet sie. Per `curl` geladene Dateien tragen keine
+Quarantäne-Markierung – macOS zeigt deshalb die Meldung „Apple konnte nicht
+überprüfen, ob … frei von Schadsoftware ist“ nicht an. Für Updates denselben
+Befehl erneut ausführen; der Arbeitsordner bleibt erhalten.
+
+**Installieren per Download:** `.dmg` im Browser laden, öffnen und
+*Keycloak Theme Emulator* in den Ordner *Programme* ziehen. Solange die App
+nicht notarisiert ist (siehe [Signieren und notarisieren](#signieren-und-notarisieren)),
+blockiert macOS sie beim ersten Öffnen. Dann entweder einmalig im Terminal
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Keycloak Theme Emulator.app"
+```
+
+ausführen (entfernt die Markierung, danach startet die App normal) oder:
+
+- macOS 15 (Sequoia) und neuer: Meldung mit *Fertig* schließen, dann
+  *Systemeinstellungen → Datenschutz & Sicherheit* → bei „Keycloak Theme
+  Emulator wurde blockiert“ auf *Dennoch öffnen* klicken.
+- macOS 14 und älter: im Finder mit gedrückter ctrl-Taste auf die App
+  klicken → *Öffnen* → *Öffnen*.
+
+**Benutzung:** Nach dem Start öffnet sich ein kleines Fenster und der
+Browser mit der Oberfläche. Beim ersten Start legt die App den Arbeitsordner
+`~/Keycloak Theme Emulator` an:
+
+```
+~/Keycloak Theme Emulator/
+├── themes/beispiel/   Beispiel-Theme – eigene Themes hier ablegen
+├── scenario.json      simulierte Realm-Einstellungen
+└── emulator.log       Protokoll (bei Problemen hilfreich)
+```
+
+Vorhandene Dateien werden bei späteren Starts oder Updates nie
+überschrieben. „Theme-Ordner öffnen“ im Fenster zeigt den Ordner im Finder;
+Fenster schließen oder „Beenden“ stoppt den Emulator. Ist Port 8899 belegt,
+nimmt die App automatisch den nächsten freien Port.
+
+### Signieren und notarisieren
+
+Damit die Warnung auch beim normalen Download aus dem Browser **für alle
+Nutzer** entfällt, muss die App mit einem Apple-Zertifikat *Developer ID
+Application* signiert und von Apple notarisiert sein. Dafür ist eine
+Mitgliedschaft im Apple Developer Program nötig (Firma oder Person).
+
+Der Workflow erledigt beides automatisch, sobald diese Repository-Secrets
+gesetzt sind (*Settings → Secrets and variables → Actions*):
+
+| Secret | Inhalt |
+|---|---|
+| `MACOS_CERTIFICATE_P12` | Zertifikat „Developer ID Application“ samt privatem Schlüssel als `.p12`, Base64-kodiert (`base64 -i zertifikat.p12 \| pbcopy`) |
+| `MACOS_CERTIFICATE_PASSWORD` | Passwort der `.p12`-Datei |
+| `MACOS_SIGNING_NAME` | Name aus dem Zertifikat ohne Präfix, z. B. `Beispiel GmbH (AB12CD34EF)` |
+| `APPLE_ID` | Apple-ID des Entwicklerkontos |
+| `APPLE_TEAM_ID` | Team-ID (10 Zeichen, im Developer-Portal unter *Membership*) |
+| `APPLE_APP_PASSWORD` | App-spezifisches Passwort der Apple-ID (appleid.apple.com → *Anmeldung und Sicherheit*) |
+
+Danach einen neuen Tag `v<version>` setzen. Der Workflow signiert App und
+`.dmg` (`jpackage --mac-sign`, Hardened Runtime), reicht die `.dmg` bei Apple
+ein (`notarytool`), heftet das Ergebnis an (`stapler`) und prüft mit
+`spctl`, dass Gatekeeper die App akzeptiert. Ohne Secrets entsteht wie bisher
+eine unsignierte `.dmg`.
+
+**Selbst bauen** (auf einem Mac mit JDK 21 und Maven):
+
+```bash
+packaging/build-installer.sh dmg     # Ergebnis: target/installer/*.dmg
+```
+
+---
+
+## Ohne Installation im Browser (portables ZIP)
+
+Alternative zur Mac-App, ohne Installation und auch für Windows und Linux:
+`Keycloak-Theme-Emulator-<version>-portable.zip` aus demselben Release
+(<https://github.com/h14r/keycloak-theme-emulator/releases/latest>).
+
+Voraussetzung ist **Java 21** oder neuer, z. B.
+[Eclipse Temurin](https://adoptium.net/de/temurin/releases/?version=21).
+
+1. ZIP entpacken.
+2. Startdatei doppelklicken:
+   - macOS: `start-mac.command` (beim ersten Mal ctrl+Klick → *Öffnen*, weil
+     die Datei aus dem Internet stammt)
+   - Windows: `start-windows.bat`
+   - Linux: `./start-linux.sh`
+3. Der Browser öffnet die Oberfläche (sonst <http://127.0.0.1:8899/>). Ist
+   Port 8899 belegt, nimmt der Emulator den nächsten freien Port – die
+   Adresse steht im Startfenster.
+
+Eigene Themes kommen in den Ordner `themes/` neben den Startdateien,
+`scenario.json` liegt daneben. Beenden: Startfenster schließen.
+
+Selbst bauen: `packaging/build-portable.sh` → `target/portable/*.zip`.
+
+Mit `java -jar target/keycloak-theme-emulator.jar --open` öffnet auch der
+normale Start (siehe [Schnellstart](#schnellstart)) die Oberfläche direkt
+im Browser.
+
+---
+
+## Schnellstart
+
+Voraussetzungen: Java 21 und Maven 3.9 (beim ersten Bauen wird Maven Central
+benötigt; danach läuft alles offline).
+
+```bash
+git clone https://github.com/h14r/keycloak-theme-emulator.git
+cd keycloak-theme-emulator
+mvn -q package
+java -jar target/keycloak-theme-emulator.jar
+```
+
+Dann <http://127.0.0.1:8899/> öffnen.
+
+Optionen:
+
+| Option | Standard | Bedeutung |
+|---|---|---|
+| `--themes DIR` | `./themes` | Theme-Ordner im Keycloak-Layout (`<theme>/login/…`, `<theme>/email/…`) – also derselbe Aufbau wie `/opt/keycloak/themes` |
+| `--scenario DATEI` | `./scenario.json` | simulierte Realm-, Nutzer- und Client-Daten |
+| `--port N` | `8899` | Port der Oberfläche |
+| `--host ADRESSE` | `127.0.0.1` | z. B. `0.0.0.0` für Zugriff aus dem Netz |
+| `--check` | – | alle Seiten und Mails prüfen, ohne Server zu starten (Exit-Code 1 bei Fehlern) |
+| `--locale xx` | automatisch | Sprache für `--check` |
+| `--open` | – | Oberfläche nach dem Start im Browser öffnen (bei belegtem Port den nächsten freien nehmen) |
+
+Themes, die als JAR verpackt sind (mit `META-INF/keycloak-themes.json`, wie
+beim Deployment über `providers/`), werden über den Klassenpfad eingebunden:
+
+```bash
+java -cp target/keycloak-theme-emulator.jar:mein-theme.jar kcemu.Main
+```
+
+---
+
+## So funktioniert es
+
+Der Emulator baut das Verhalten von Keycloak nicht nach, sondern **führt die
+Original-Klassen von Keycloak aus** (aus `keycloak-services`,
+`keycloak-server-spi-private` und `keycloak-themes` der eingestellten Version)
+und ersetzt nur das, was im Server eine Datenbank, Infinispan oder einen
+HTTP-Request bräuchte.
+
+```
+Theme-Ordner ─┐
+              ├─► DefaultThemeManager (parent/import, Nachrichten, Properties)
+keycloak-     │        │
+themes.jar ───┘        ▼
+               FreeMarkerLoginFormsProvider ──► DefaultFreeMarkerProvider ──► HTML
+               FreeMarkerEmailTemplateProvider ─┘                    (wie im Server)
+                       ▲
+   simuliert: Realm, Nutzer, Client, Auth-Session, HTTP-Request, IdP-Liste, Credentials
+```
+
+Eine Login-Seite entsteht also genau so wie im Server: Für „Falsche
+Anmeldedaten“ ruft der Emulator z. B.
+`addError(new FormMessage("username", "invalidUserMessage"))` und
+`createLoginUsernamePassword()` auf – dieselben Aufrufe wie
+`UsernamePasswordForm` in Keycloak. Mails entstehen über
+`sendVerifyEmail(…)`, `sendPasswordReset(…)`, `sendEvent(…)` usw.; statt
+SMTP wird die fertige Nachricht (Betreff, Text- und HTML-Teil) mitgeschnitten.
+
+Konfiguration wie im Entwicklungsmodus (`kc.sh start-dev`): Theme- und
+Template-Cache sind aus, Änderungen am Theme sind beim nächsten Laden sichtbar.
+
+---
+
+## Was echt ist und was simuliert wird
+
+| Bereich | Echt (Original-Code von Keycloak) | Simuliert |
+|---|---|---|
+| Theme-Auflösung | `DefaultThemeManager`, `FolderThemeProvider`, Classpath-/JAR-Themes, `parent=`, `import=`, Zusammenführung von `theme.properties` und Nachrichten, `${env.X}`-Ersetzung in Properties | – |
+| Template-Engine | `DefaultFreeMarkerProvider` mit identischer FreeMarker-Konfiguration (Version aus `keycloak-parent`, HTML-Escaping, `kcSanitize`) | – |
+| Datenmodell der Seiten | `FreeMarkerLoginFormsProvider` mit allen Beans (`realm`, `url`, `login`, `message`, `messagesPerField`, `social`, `locale`, `profile`, `passwordPolicies`, `auth`, …) | – |
+| Mails | `FreeMarkerEmailTemplateProvider` (Betreff, `realmName`, `user`, `linkExpirationFormatter`, `ltr`, …) | Versand (Mitschnitt statt SMTP) |
+| Sprache | `DefaultLocaleSelectorProvider` (kc_locale, Nutzerattribut, Accept-Language, Realm-Standard), Realm-Übersetzungen (`localizationTexts`) | Browser-Header aus dem Szenario |
+| Benutzerprofil | `DeclarativeUserProfileProvider` inkl. eigener User-Profile-JSON und echter Validierung | – |
+| Passwort-Richtlinie | `PasswordPolicy.parse(…)` mit den Original-Policy-Providern | – |
+| Realm, Client, Nutzer | `InMemoryUserAdapter` für den Nutzer | Realm, Client, Identity-Provider-Liste, OTP-Geräte, Authentifizierungssession |
+| Ressourcen | Auslieferung über die Theme-Kette wie `/resources/{version}/{typ}/{theme}/…` | Content-Type über `MimeTypeUtil` |
+
+---
+
+## Oberfläche
+
+- **Formularseiten / E-Mails** links auswählen; jede Seite hat mehrere
+  **Varianten** (Standard, Fehlerzustände, Erfolgsmeldungen …).
+- **Theme**: alle im Theme-Ordner und in Keycloak vorhandenen Themes.
+  **Vergleich mit** zeigt ein zweites Theme daneben (z. B. das eigene gegen
+  `keycloak.v2`).
+- **Sprache**: automatisch (Accept-Language aus dem Szenario) oder fest –
+  entspricht `?kc_locale=` bzw. bei Mails dem Profilattribut `locale`.
+- **Breite**: Mobil (375 px), Tablet (768 px), Desktop (1280 px), volle Breite.
+- **Live-Neuladen**: Sobald sich eine Datei im Theme-Ordner ändert, wird die
+  Vorschau neu erzeugt.
+- **Klicken in der Vorschau**: Sprachumschalter, „Registrieren“, „Passwort
+  vergessen?“ führen zur passenden Seite. Abgeschickte Formulare zeigen die
+  übermittelten Felder (gelb markierter Hinweis des Emulators – keine
+  Keycloak-Ausgabe).
+- **Bewertung** (rechts): Befunde der Prüfungen, Barrierefreiheitsprüfung
+  (axe-core, läuft lokal), Theme-Kette mit den eigenen Dateien, verfügbare
+  Template-Variablen und abgefragte Textschlüssel.
+- **Gesamtes Theme prüfen**: alle Varianten und Mails nacheinander, optional
+  mit Barrierefreiheit; Ergebnis als Markdown-Bericht herunterladbar.
+- **Szenario**: Realm-Schalter (Registrierung, „Angemeldet bleiben“, E-Mail
+  als Benutzername …) und das vollständige Szenario als JSON bearbeiten.
+
+Bei Dark Mode folgt das Theme `keycloak.v2` der Einstellung des
+Betriebssystems bzw. Browsers – genau wie im Original.
+
+---
+
+## Abgedeckte Seiten und E-Mails
+
+**Formularseiten** (Login-Theme):
+
+| Template | Auslöser im Server | Varianten |
+|---|---|---|
+| `login.ftl` | Username Password Form | Standard, falsche Anmeldedaten, Konto deaktiviert, Brute-Force-Sperre, „E-Mail gesendet“, Sitzung abgelaufen |
+| `login-username.ftl` / `login-password.ftl` | Username Form / Password Form | Standard, Fehler |
+| `login-otp.ftl` | OTP Form | Standard, falscher Code |
+| `login-page-expired.ftl` | veralteter Tab / Zurück-Taste | Standard |
+| `register.ftl` | Registrierung (Felder aus dem User Profile) | Standard, mit Nutzungsbedingungen, Fehler (echte Profil-Validierung) |
+| `terms.ftl` | Required Action „Terms and Conditions“ | Standard |
+| `login-reset-password.ftl` | „Passwort vergessen?“ | Standard, kein Benutzername |
+| `login-update-password.ftl` | Required Action „Update Password“ | über Reset-Link, vom Admin angefordert, Passwörter ungleich, Richtlinie verletzt |
+| `login-update-profile.ftl` | Required Action „Update Profile“ | Standard, neuer Nutzer ohne Namen |
+| `login-verify-email.ftl` | Required Action „Verify Email“ | Standard |
+| `login-config-totp.ftl` | Required Action „Configure OTP“ | Standard, falscher Code |
+| `delete-account-confirm.ftl` | Required Action „Delete Account“ | Standard, aus der Anwendung ausgelöst |
+| `login-idp-link-confirm.ftl` / `login-idp-link-email.ftl` | First-Broker-Login | Standard |
+| `info.ftl` | Abschluss von Aktionen | Konto aktualisiert, E-Mail bestätigt, Admin-Aktionen ausführen |
+| `error.ftl` | Fehler im Ablauf | Link abgelaufen, Cookie fehlt, ungültige Anfrage, Seite nicht gefunden |
+| `logout-confirm.ftl` | Abmeldung ohne `id_token_hint` | Standard |
+| `login-oauth2-device-verify-user-code.ftl` | Device Authorization Grant | Standard |
+
+**E-Mails** (E-Mail-Theme, jeweils HTML- und Text-Teil plus Betreff):
+`email-verification`, `password-reset`, `executeActions`,
+`email-update-confirmation`, `identity-provider-link`, `org-invite`,
+`email-test` sowie die Ereignis-Mails `event-login_error`,
+`event-update_password`, `event-update_totp`, `event-remove_totp`,
+`event-update_credential`, `event-remove_credential`,
+`event-user_disabled_by_temporary_lockout`,
+`event-user_disabled_by_permanent_lockout`.
+
+---
+
+## Prüfungen
+
+Jeder Befund ist entweder **Keycloak-Verhalten** (so passiert es im Server)
+oder als **Heuristik** markiert (Erfahrungsregel).
+
+| Prüfung | Art |
+|---|---|
+| FreeMarker-Fehler mit Template, Zeile und Spalte – Keycloak würde eine leere Seite mit Status 500 liefern bzw. die Mail nicht versenden | Keycloak-Verhalten |
+| Theme, `parent=` oder `import=` nicht auffindbar → Keycloak fällt auf das Standard-Theme zurück | Keycloak-Verhalten |
+| `styles`, `scripts`, `stylesCommon`, `scriptsCommon` verweisen auf nicht vorhandene Dateien; im Browser zusätzlich alle eingebundenen CSS/JS/Bilder (HTTP-Status) | Keycloak-Verhalten |
+| Fehlender Textschlüssel (Keycloak zeigt dann den Schlüssel selbst an); Kennzeichnung, wenn er auch im Original-Theme fehlt | Keycloak-Verhalten |
+| Möglicherweise unübersetzter Text (identisch mit dem englischen Bündel) | Heuristik |
+| Barrierefreiheit (axe-core 4.11, WCAG-Regeln) | Prüfwerkzeug |
+| Mail: Aktionslink fehlt im HTML- oder Text-Teil, leerer Betreff/Text-Teil, Bilder mit relativer Adresse | Keycloak-Verhalten / Mail-Clients |
+| Mail: > 102 KB (Gmail kürzt), externe Stylesheets, `<script>`, flex/grid/position (Outlook), data:-Bilder, fehlende `alt`-Texte, langer Betreff | Heuristik |
+
+---
+
+## Szenario (simulierte Realm-Einstellungen)
+
+`scenario.json` beschreibt, was im Server die Admin-Konsole festlegt:
+
+```jsonc
+{
+  "loginTheme": "beispiel",            // Realm settings → Themes
+  "emailTheme": "beispiel",
+  "acceptLanguage": "de-DE,de;q=0.9",  // Browser des simulierten Nutzers
+  "realm": {
+    "name": "demo", "displayName": "Beispiel GmbH",
+    "registrationAllowed": true, "resetPasswordAllowed": true, "rememberMe": true,
+    "loginWithEmailAllowed": true, "registrationEmailAsUsername": false,
+    "internationalizationEnabled": true, "supportedLocales": ["de", "en"], "defaultLocale": "de",
+    "passwordPolicy": "length(12) and digits(1) and notUsername",
+    "darkMode": true,
+    "localizationTexts": { "de": { "loginAccountTitle": "Hallo!" } }   // Realm settings → Localization
+  },
+  "user":   { "username": "max.mustermann", "email": "…", "firstName": "Max", "lastName": "Mustermann", "otpDevices": ["Smartphone"] },
+  "client": { "clientId": "portal", "name": "Kundenportal", "baseUrl": "https://portal.example.org",
+              "attributes": { "login_theme": "" } },                     // Client-spezifisches Login-Theme
+  "identityProviders": [ { "alias": "google", "providerId": "google", "displayName": "Google" } ],
+  "userProfile": null   // oder die JSON-Konfiguration aus Realm settings → User profile → JSON editor
+}
+```
+
+Die User-Profile-Konfiguration wird wie im Server geprüft und angewendet; die
+Registrierungs- und Profilseiten zeigen dann genau die konfigurierten Felder,
+Gruppen, Annotationen und Validierungsfehler.
+
+---
+
+## Eigenes Theme anlegen
+
+Im Ordner `themes/beispiel` liegt ein Ausgangspunkt:
+
+```
+themes/beispiel/
+├── login/
+│   ├── theme.properties          parent=keycloak.v2, eigene CSS-Datei
+│   ├── messages/messages_de.properties   nur abweichende Texte
+│   └── resources/css/beispiel.css        Markenfarben über PatternFly-Variablen
+└── email/
+    ├── theme.properties          parent=keycloak
+    ├── html/template.ftl         gemeinsames Mail-Layout (Tabellen, Inline-Stile)
+    └── messages/messages_de.properties
+```
+
+Für einen neuen Entwurf den Ordner kopieren und umbenennen, im Szenario
+`loginTheme`/`emailTheme` setzen (oder oben in der Oberfläche auswählen).
+Hinweise:
+
+- `styles=` ersetzt den Wert des Parents vollständig – soll dessen CSS
+  weiter gelten, muss sie mit aufgeführt werden (`styles=css/styles.css css/eigen.css`).
+- Templates nur dann kopieren, wenn das Markup wirklich anders sein muss;
+  Texte über `messages_*.properties`, Aussehen über CSS ändern. Eigene
+  Template-Kopien müssen bei jedem Keycloak-Update nachgezogen werden.
+- Der fertige Ordner wird unverändert nach `/opt/keycloak/themes/<name>`
+  kopiert (oder als JAR mit `META-INF/keycloak-themes.json` bereitgestellt).
+
+---
+
+## Prüfung auf der Kommandozeile (CI)
+
+```bash
+java -jar target/keycloak-theme-emulator.jar --check --locale de
+```
+
+rendert alle Seitenvarianten und Mails mit den Themes aus dem Szenario,
+listet Fehler und Warnungen und endet mit Exit-Code 1, wenn mindestens ein
+Fehler gefunden wurde.
+
+---
+
+## Keycloak-Version wechseln
+
+Die Darstellung hängt von der Keycloak-Version ab (Templates, Texte,
+Beans). Voreingestellt ist **26.8.1**. Für eine andere Server-Version:
+
+```bash
+mvn -q package -Dkeycloak.version=26.4.7
+```
+
+FreeMarker und alle übrigen Bibliotheken kommen dann aus dem
+`keycloak-parent` derselben Version. Getestet sind **26.8.1** und **26.4.7**;
+bei anderen Versionen können sich Schnittstellen geändert haben – der Build
+meldet das beim Kompilieren.
+
+Weil die mitgelieferten Themes der jeweiligen Version verwendet werden,
+zeigen sich auch deren Eigenheiten. Beispiel: Unter 26.4.7 meldet die
+Prüfung bei `org-invite.ftl`, dass der Link im Text-Teil HTML-maskiert ist
+(`&amp;`, `&#61;`) – das Original-Template dieser Version wendet
+`kcSanitize` auf den Text-Teil an; in 26.8.1 tritt das nicht auf.
+
+---
+
+## Grenzen
+
+- **Account-Konsole und Admin-Konsole** sind React-Anwendungen
+  (keine FreeMarker-Templates) und werden nicht emuliert. Das
+  Login-Theme deckt alle Formularseiten der Nutzerverwaltung ab, die
+  Nutzer im Anmeldeablauf sehen.
+- Nicht im Katalog: WebAuthn/Passkeys, Auswahl des Anmeldeverfahrens,
+  OAuth-Zustimmung, X.509, SAML-Post-Formular, Wiederherstellungscodes,
+  „E-Mail ändern“ (Preview-Feature), IdP-Profilprüfung, Organisationsauswahl.
+- Seiten laufen ohne echten Authentifizierungs-Flow (`AuthenticationFlowContext`
+  ist leer). Template-Teile, die davon abhängen (z. B. `auth.showUsername()`,
+  „Anderes Verfahren wählen“), erscheinen deshalb nicht.
+- Eigene Java-Erweiterungen (eigene Authenticatoren, eigene
+  FreeMarker-Methoden) sind nicht eingebunden.
+- `${url.resourcesUrl}` und Links zeigen auf den Emulator
+  (`http://127.0.0.1:8899/…`); im Server ist das die Frontend-URL von Keycloak.
+- Feature-Flags entsprechen der Voreinstellung von Keycloak.
+
+Changelog: [CHANGELOG.md](./CHANGELOG.md)

@@ -1,0 +1,32 @@
+Keycloak Theme Emulator – portable Fassung
+==========================================
+
+Vorschau und Prüfung von Keycloak-Login- und E-Mail-Themes im Browser,
+ohne Installation. Läuft auf macOS, Windows und Linux.
+
+Voraussetzung
+  Java 21 oder neuer, z. B. Eclipse Temurin:
+  https://adoptium.net/de/temurin/releases/?version=21
+
+Starten
+  macOS:    start-mac.command doppelklicken
+            (beim ersten Mal: ctrl+Klick → Öffnen, da aus dem Internet geladen)
+  Windows:  start-windows.bat doppelklicken
+  Linux:    ./start-linux.sh
+
+  Der Browser öffnet die Oberfläche automatisch, sonst http://127.0.0.1:8899/
+  aufrufen. Ist Port 8899 belegt, wird der nächste freie Port verwendet –
+  die Adresse steht im Startfenster.
+
+  Beenden: Startfenster schließen (bzw. ctrl+C).
+
+Eigene Themes
+  In den Ordner "themes" legen – Aufbau wie /opt/keycloak/themes:
+  themes/<name>/login/…  und  themes/<name>/email/…
+  Als Vorlage dient themes/beispiel. Änderungen werden sofort angezeigt.
+
+Simulierte Realm-Einstellungen
+  scenario.json (oder in der Oberfläche über „Szenario“).
+
+Ausführliche Anleitung
+  https://github.com/h14r/keycloak-theme-emulator

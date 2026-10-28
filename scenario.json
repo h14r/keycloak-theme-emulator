@@ -1,0 +1,47 @@
+{
+  "loginTheme" : "beispiel",
+  "emailTheme" : "beispiel",
+  "acceptLanguage" : "de-DE,de;q=0.9,en;q=0.8",
+  "realm" : {
+    "name" : "demo",
+    "displayName" : "Beispiel GmbH",
+    "displayNameHtml" : null,
+    "registrationAllowed" : true,
+    "registrationEmailAsUsername" : false,
+    "resetPasswordAllowed" : true,
+    "rememberMe" : true,
+    "loginWithEmailAllowed" : true,
+    "duplicateEmailsAllowed" : false,
+    "editUsernameAllowed" : false,
+    "verifyEmail" : true,
+    "internationalizationEnabled" : true,
+    "supportedLocales" : [ "de", "en" ],
+    "defaultLocale" : "de",
+    "passwordPolicy" : "length(12) and digits(1) and notUsername",
+    "darkMode" : true,
+    "organizationsEnabled" : false,
+    "localizationTexts" : { },
+    "attributes" : { }
+  },
+  "user" : {
+    "username" : "max.mustermann",
+    "email" : "max.mustermann@example.org",
+    "firstName" : "Max",
+    "lastName" : "Mustermann",
+    "emailVerified" : true,
+    "otpDevices" : [ "Smartphone" ],
+    "attributes" : { }
+  },
+  "client" : {
+    "clientId" : "portal",
+    "name" : "Kundenportal",
+    "description" : null,
+    "baseUrl" : "https://portal.example.org",
+    "attributes" : { }
+  },
+  "identityProviders" : [
+    { "alias" : "google", "providerId" : "google", "displayName" : "Google", "guiOrder" : "1", "enabled" : true, "hideOnLogin" : false },
+    { "alias" : "microsoft", "providerId" : "microsoft", "displayName" : "Microsoft", "guiOrder" : "2", "enabled" : true, "hideOnLogin" : false }
+  ],
+  "userProfile" : null
+}

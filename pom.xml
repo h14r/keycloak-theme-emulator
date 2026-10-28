@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>de.prototypes</groupId>
+  <artifactId>keycloak-theme-emulator</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+  <name>Keycloak Theme Emulator</name>
+
+  <properties>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!--
+      Muss zur Version des Ziel-Servers passen. Wechsel z. B. mit
+      mvn package -Dkeycloak.version=26.4.7
+      FreeMarker-, RESTEasy- und alle übrigen Versionen kommen aus dem
+      keycloak-parent-POM derselben Version.
+    -->
+    <keycloak.version>26.8.1</keycloak.version>
+    <mockito.version>5.20.0</mockito.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.keycloak</groupId>
+        <artifactId>keycloak-parent</artifactId>
+        <version>${keycloak.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <!-- Originale Keycloak-Klassen: Theme-Manager, FreeMarker-Provider, Login-/Mail-Provider, Template-Beans -->
+    <dependency>
+      <groupId>org.keycloak</groupId>
+      <artifactId>keycloak-services</artifactId>
+      <version>${keycloak.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.keycloak</groupId>
+      <artifactId>keycloak-server-spi</artifactId>
+      <version>${keycloak.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.keycloak</groupId>
+      <artifactId>keycloak-server-spi-private</artifactId>
+      <version>${keycloak.version}</version>
+    </dependency>
+    <!-- Mitgelieferte Themes (base, keycloak, keycloak.v2, common) inkl. PatternFly-Vendor-Dateien -->
+    <dependency>
+      <groupId>org.keycloak</groupId>
+      <artifactId>keycloak-themes</artifactId>
+      <version>${keycloak.version}</version>
+    </dependency>
+    <!-- Im Server "provided": hier explizit, Version aus keycloak-parent -->
+    <dependency>
+      <groupId>org.freemarker</groupId>
+      <artifactId>freemarker</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.jboss.resteasy</groupId>
+      <artifactId>resteasy-core</artifactId>
+    </dependency>
+    <!-- Barrierefreiheitsprüfung in der Oberfläche (läuft lokal im Browser) -->
+    <dependency>
+      <groupId>org.webjars.npm</groupId>
+      <artifactId>axe-core</artifactId>
+      <version>4.11.3</version>
+    </dependency>
+    <!-- Simulierte Server-Umgebung (Session, Realm, Nutzer ...) -->
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <version>${mockito.version}</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>keycloak-theme-emulator</finalName>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <!-- Startausstattung für den Arbeitsordner der installierten App -->
+      <resource>
+        <directory>themes</directory>
+        <targetPath>starter/themes</targetPath>
+      </resource>
+      <resource>
+        <directory>.</directory>
+        <includes>
+          <include>scenario.json</include>
+        </includes>
+        <targetPath>starter</targetPath>
+      </resource>
+    </resources>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>3.7.0</version>
+        <executions>
+          <execution>
+            <id>copy-libs</id>
+            <phase>package</phase>
+            <goals><goal>copy-dependencies</goal></goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/lib</outputDirectory>
+              <includeScope>runtime</includeScope>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.4.2</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <mainClass>kcemu.Main</mainClass>
+              <addClasspath>true</addClasspath>
+              <classpathPrefix>lib/</classpathPrefix>
+            </manifest>
+          </archive>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

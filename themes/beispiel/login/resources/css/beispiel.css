@@ -1,0 +1,22 @@
+/* Markenfarben über PatternFly-5-Variablen setzen */
+:root {
+    --beispiel-primary: #0f6e56;
+    --beispiel-primary-hover: #0b5543;
+    --keycloak-card-top-color: var(--beispiel-primary);
+    --pf-v5-global--primary-color--100: var(--beispiel-primary);
+    --pf-v5-global--primary-color--200: var(--beispiel-primary-hover);
+    --pf-v5-global--link--Color: var(--beispiel-primary);
+    --pf-v5-global--link--Color--hover: var(--beispiel-primary-hover);
+}
+
+.login-pf body {
+    background: linear-gradient(160deg, #e8f3ef 0%, #f6f7f9 60%) fixed;
+}
+
+/* keycloak.v2 setzt hier weiße Schrift mit !important (für das dunkle Hintergrundbild) –
+   auf dem hellen Hintergrund muss die Farbe daher ebenfalls mit !important überschrieben werden */
+#kc-header-wrapper {
+    font-weight: 700;
+    letter-spacing: .02em;
+    color: var(--beispiel-primary) !important;
+}

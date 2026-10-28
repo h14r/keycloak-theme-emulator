@@ -1,0 +1,167 @@
+# Baut den Keycloak Theme Emulator
+# - als installierbare macOS-App (.dmg) für Apple Silicon (arm64) und Intel (x64)
+# - als portable Fassung (ZIP, für macOS/Windows/Linux, benötigt Java 21)
+#
+# - bei jedem Push und Pull Request: .dmg als Artefakt des Workflow-Laufs
+# - bei einem Tag "v*" (z. B. v1.0.0): zusätzlich als GitHub-Release
+#   (öffentliches Repository → Download ohne GitHub-Anmeldung)
+# - manuell über "Run workflow"
+name: Pakete (.dmg und portable ZIP)
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dmg:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    env:
+      # Signieren + Notarisieren nur, wenn die Apple-Zugangsdaten als Secrets hinterlegt sind
+      # (siehe README, Abschnitt „Signieren und notarisieren“). Ohne sie entsteht eine
+      # unsignierte .dmg wie bisher.
+      HAS_SIGNING: ${{ secrets.MACOS_CERTIFICATE_P12 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Prüfung aller Seiten und Mails (Beispiel-Theme)
+        run: |
+          mvn -q -B package
+          java -jar target/keycloak-theme-emulator.jar --check --locale de
+
+      - name: Signierzertifikat importieren
+        if: env.HAS_SIGNING == 'true'
+        env:
+          P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          P12_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          KC="$RUNNER_TEMP/signing.keychain-db"
+          KCPW="$(openssl rand -hex 16)"
+          echo "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KCPW" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KCPW" "$KC"
+          security import "$RUNNER_TEMP/cert.p12" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KC"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KCPW" "$KC" > /dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          echo "MAC_SIGNING_KEYCHAIN=$KC" >> "$GITHUB_ENV"
+
+      - name: .dmg bauen
+        env:
+          MAC_SIGNING_NAME: ${{ env.HAS_SIGNING == 'true' && secrets.MACOS_SIGNING_NAME || '' }}
+        run: packaging/build-installer.sh dmg
+
+      - name: Notarisieren (Apple)
+        if: env.HAS_SIGNING == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          DMG="$(ls target/installer/*.dmg)"
+          xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple "$DMG"
+          spctl --assess --type open --context context:primary-signature -v "$DMG"
+
+      - name: Installierte App starten (Smoke-Test)
+        run: |
+          DMG="$(ls target/installer/*.dmg)"
+          MOUNT="$(hdiutil attach -nobrowse -readonly "$DMG" | tail -1 | cut -f3-)"
+          STATUS=0
+          if [[ "$HAS_SIGNING" == "true" ]]; then
+            # Gatekeeper-Prüfung wie beim Nutzer: muss „accepted … Notarized Developer ID“ ergeben
+            spctl --assess --type execute -vv "$MOUNT/Keycloak Theme Emulator.app" || STATUS=$?
+          fi
+          "$MOUNT/Keycloak Theme Emulator.app/Contents/MacOS/Keycloak Theme Emulator" --check --locale de || STATUS=$?
+          cat "$HOME/Keycloak Theme Emulator/emulator.log"
+          hdiutil detach "$MOUNT"
+          exit $STATUS
+
+      - name: Dateiname mit Architektur
+        id: name
+        run: |
+          VERSION="$(mvn -q help:evaluate -Dexpression=project.version -DforceStdout)"
+          FILE="Keycloak-Theme-Emulator-${VERSION}-${{ matrix.arch }}.dmg"
+          mv target/installer/*.dmg "target/installer/$FILE"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.name.outputs.file }}
+          path: target/installer/${{ steps.name.outputs.file }}
+          if-no-files-found: error
+
+  portable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Portables ZIP bauen
+        id: zip
+        run: |
+          packaging/build-portable.sh
+          echo "file=$(cd target/portable && ls *.zip)" >> "$GITHUB_OUTPUT"
+
+      - name: Entpacktes ZIP starten (Smoke-Test)
+        run: |
+          mkdir -p "$RUNNER_TEMP/zip"
+          unzip -q "target/portable/${{ steps.zip.outputs.file }}" -d "$RUNNER_TEMP/zip"
+          DIR="$(ls -d "$RUNNER_TEMP"/zip/*/)"
+          (cd / && "$DIR/start-linux.sh" > "$RUNNER_TEMP/start.log" 2>&1 &)
+          for i in $(seq 1 60); do curl -sf -o /dev/null http://127.0.0.1:8899/ && break; sleep 1; done
+          cat "$RUNNER_TEMP/start.log"
+          curl -sf http://127.0.0.1:8899/api/page/login | grep -q '"status" : 200'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.zip.outputs.file }}
+          path: target/portable/${{ steps.zip.outputs.file }}
+          if-no-files-found: error
+          compression-level: 0
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [dmg, portable]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dmg
+          merge-multiple: true
+      - name: GitHub-Release anlegen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dmg/*.dmg dmg/*.zip \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "Keycloak Theme Emulator ${GITHUB_REF_NAME#v}" \
+            --notes "macOS-App (.dmg) für Apple Silicon (arm64) und Intel (x64) sowie portable Fassung (ZIP) für macOS, Windows und Linux mit Java 21. Installation und erster Start: siehe README."
