@@ -636,7 +636,20 @@
     S.selected = it;
     paint();
     drawPage();
-    if (it && it.el && it.el.scrollIntoView && isVisible(it.el)) it.el.scrollIntoView({ block: 'center', inline: 'nearest' });
+    if (it && it.el && it.el.isConnected && isVisible(it.el)) reveal(it.el);
+  }
+
+  /**
+   * Element in der Vorschau sichtbar machen. Nur das Fenster der Vorschau scrollen –
+   * scrollIntoView würde auch die Oberfläche des Emulators mitscrollen.
+   */
+  function reveal(el) {
+    const win = el.ownerDocument.defaultView;
+    if (!win) return;
+    const r = el.getBoundingClientRect();
+    if (r.top >= 0 && r.bottom <= win.innerHeight && r.left >= 0 && r.right <= win.innerWidth) return;
+    win.scrollTo({ top: Math.max(0, win.scrollY + r.top - (win.innerHeight - r.height) / 2), left: Math.max(0, win.scrollX + r.left - 20) });
+    drawPage();
   }
 
   function onClick(e) {

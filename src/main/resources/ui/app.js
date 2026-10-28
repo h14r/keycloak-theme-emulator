@@ -41,6 +41,8 @@ async function init() {
   select(state.mode, state.id, state.variant);
   setInterval(pollStamp, 1500);
   bindModules();
+  bindWelcome();
+  if (welcomeDue()) openWelcome();
   await loadModules();
 }
 
@@ -616,6 +618,74 @@ function bindThemes() {
   });
   dz.addEventListener('dragover', () => dz.classList.add('over'));
   dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+}
+
+// ------------------------------------------------------------------ Überblick beim Start
+
+const WELCOME_KEY = 'kcemu-welcome';
+let welcomeSlide = 0;
+
+/** Beim Start zeigen – außer „nicht mehr zeigen“ wurde für genau diese Version gewählt. */
+function welcomeDue() {
+  if (new URLSearchParams(location.search).has('nowelcome')) return false;
+  try {
+    const w = JSON.parse(localStorage.getItem(WELCOME_KEY) || '{}');
+    return !(w.hide && w.version === state.catalog.appVersion);
+  } catch (e) { return true; }
+}
+
+function openWelcome() {
+  const c = state.catalog;
+  const fill = {
+    version: c.appVersion,
+    kc: c.keycloakVersion,
+    pages: c.pages.length,
+    variants: c.pages.reduce((n, p) => n + p.variants.length, 0),
+    mails: c.mails.length,
+  };
+  for (const el of $('dlgWelcome').querySelectorAll('[data-wel]')) el.textContent = fill[el.dataset.wel];
+  try { $('welHide').checked = !!JSON.parse(localStorage.getItem(WELCOME_KEY) || '{}').hide; } catch (e) { $('welHide').checked = false; }
+  showSlide(0);
+  if (!$('dlgWelcome').open) $('dlgWelcome').showModal();
+  $('welNext').focus();
+}
+
+function showSlide(i) {
+  const slides = $('dlgWelcome').querySelectorAll('.wel-slide');
+  welcomeSlide = Math.max(0, Math.min(slides.length - 1, i));
+  slides.forEach((s, k) => { s.hidden = k !== welcomeSlide; });
+  $('welNav').querySelectorAll('button').forEach((b, k) => {
+    if (k === welcomeSlide) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+  });
+  $('welStep').textContent = `${welcomeSlide + 1} / ${slides.length}`;
+  $('welPrev').disabled = welcomeSlide === 0;
+  $('welNext').textContent = welcomeSlide === slides.length - 1 ? 'Los geht’s' : 'Weiter';
+  slides[welcomeSlide].scrollTop = 0;
+}
+
+function bindWelcome() {
+  const dlg = $('dlgWelcome');
+  $('btnWelcome').onclick = openWelcome;
+  $('welClose').onclick = () => dlg.close();
+  $('welPrev').onclick = () => showSlide(welcomeSlide - 1);
+  $('welNext').onclick = () => {
+    if (welcomeSlide === dlg.querySelectorAll('.wel-slide').length - 1) dlg.close();
+    else showSlide(welcomeSlide + 1);
+  };
+  $('welNav').onclick = (e) => {
+    const b = e.target.closest('button[data-slide]');
+    if (b) showSlide(Number(b.dataset.slide));
+  };
+  $('welHide').onchange = (e) => {
+    try {
+      localStorage.setItem(WELCOME_KEY, JSON.stringify({ hide: e.target.checked, version: state.catalog.appVersion }));
+    } catch (err) { /* ohne Speicher weiter */ }
+  };
+  dlg.addEventListener('keydown', (e) => {
+    if (e.target.closest('input, textarea, select')) return;
+    if (e.key === 'ArrowRight') { showSlide(welcomeSlide + 1); e.preventDefault(); }
+    else if (e.key === 'ArrowLeft') { showSlide(welcomeSlide - 1); e.preventDefault(); }
+  });
 }
 
 // ------------------------------------------------------------------ Module

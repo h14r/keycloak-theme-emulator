@@ -18,6 +18,10 @@ Barrierefreiheitsprüfung nach WCAG 2.2 AA als abschaltbares Modul.
   „WCAG-Verstöße“)
 - Die bisherige Schaltfläche „Barrierefreiheit prüfen (axe-core)“ ist im
   Modul aufgegangen
+- Überblick beim Start: neun kurze Seiten zu den Funktionen mit Bildern aus
+  der Anwendung (Beispiel-Theme); „nicht mehr zeigen“ bis zur nächsten
+  Version, jederzeit über „Überblick“; Bilder werden mit
+  `packaging/screenshots.js` erzeugt
 
 ## [1.2.0] – 2026-10-28
 

@@ -19,6 +19,7 @@
       </label>
       <button type="button" id="btnThemes" title="Themes importieren und zum Testen auswählen">Themes</button>
       <button type="button" id="btnScenario">Szenario</button>
+      <button type="button" id="btnWelcome" title="Überblick über die Funktionen dieser Version">Überblick</button>
       <button type="button" id="btnModules" title="Zusatzmodule aktivieren, deaktivieren oder entfernen" hidden>Module</button>
       <button type="button" id="btnAudit" class="primary">Gesamtes Theme prüfen</button>
     </div>
@@ -143,6 +144,170 @@
   </dialog>
 
   <div class="dropveil" id="dropveil" hidden><div>Theme loslassen zum Importieren</div></div>
+
+  <dialog id="dlgWelcome" aria-labelledby="welTitle">
+    <div class="dlg welcome">
+      <div class="wel-head">
+        <h2 id="welTitle">Keycloak Theme Emulator <span data-wel="version"></span> – Überblick</h2>
+        <button type="button" id="welClose" aria-label="Überblick schließen">×</button>
+      </div>
+      <div class="wel-body">
+        <nav class="wel-nav" aria-label="Themen des Überblicks"><ol id="welNav">
+          <li><button type="button" data-slide="0">Worum es geht</button></li>
+          <li><button type="button" data-slide="1">Seiten und Varianten</button></li>
+          <li><button type="button" data-slide="2">Eigenes Theme laden</button></li>
+          <li><button type="button" data-slide="3">Breite, Zoom, Vergleich</button></li>
+          <li><button type="button" data-slide="4">E-Mails</button></li>
+          <li><button type="button" data-slide="5">Bewertung und Gesamtprüfung</button></li>
+          <li><button type="button" data-slide="6">Neu: Barrierefreiheit</button></li>
+          <li><button type="button" data-slide="7">Barrierefreiheit im Detail</button></li>
+          <li><button type="button" data-slide="8">Szenario und Module</button></li>
+        </ol></nav>
+        <div class="wel-slides">
+        <section class="wel-slide" data-slide="0" aria-labelledby="welH0">
+          <div class="wel-text">
+            <h3 id="welH0">Willkommen</h3>
+            <p>Der Emulator zeigt Anmeldeseiten und E-Mails eines Keycloak-Themes <strong>genau so, wie Keycloak <span data-wel="kc"></span> sie erzeugt</strong> – ohne Keycloak-Server, ohne Zugang, ohne Container.</p>
+            <ul>
+              <li>Es laufen die echten Keycloak-Klassen und FreeMarker-Templates; nur Realm, Benutzer und Sitzung sind simuliert.</li>
+              <li><span data-wel="pages"></span> Formularseiten in <span data-wel="variants"></span> Varianten und <span data-wel="mails"></span> E-Mails stehen links zur Auswahl.</li>
+              <li>Rechts stehen die Befunde: Template-Fehler, fehlende Texte und Dateien, Theme-Kette.</li>
+            </ul>
+          </div>
+          <figure>
+            <a href="/ui/welcome/01-uebersicht.jpg" target="_blank" rel="noopener" title="Bild in voller Größe öffnen"><img src="/ui/welcome/01-uebersicht.jpg" alt="Hauptansicht: links die Liste der Seiten, in der Mitte die Anmeldeseite des Beispiel-Themes, rechts die Bewertung" loading="lazy"></a>
+            <figcaption>Hauptansicht mit dem Beispiel-Theme: Seitenliste, Vorschau und Bewertung.</figcaption>
+          </figure>
+        </section>
+        <section class="wel-slide" data-slide="1" aria-labelledby="welH1" hidden>
+          <div class="wel-text">
+            <h3 id="welH1">Jede Seite in allen Zuständen</h3>
+            <p>Viele Fehler zeigen sich erst in Sonderfällen. Deshalb hat jede Seite <strong>Varianten</strong> – zum Beispiel falsche Anmeldedaten, gesperrtes Konto oder Erfolgsmeldungen.</p>
+            <ul>
+              <li>Variante und <strong>Sprache</strong> oben in der Leiste wählen.</li>
+              <li>Links in der Vorschau funktionieren: „Registrieren“, „Passwort vergessen?“ und der Sprachumschalter führen zur passenden Seite.</li>
+              <li><strong>roh öffnen ↗</strong> zeigt die Seite allein in einem neuen Tab.</li>
+            </ul>
+          </div>
+          <figure>
+            <a href="/ui/welcome/02-varianten.jpg" target="_blank" rel="noopener" title="Bild in voller Größe öffnen"><img src="/ui/welcome/02-varianten.jpg" alt="Anmeldeseite in der Variante „Falsche Anmeldedaten“ mit Fehlermeldung über dem Formular" loading="lazy"></a>
+            <figcaption>Variante „Falsche Anmeldedaten“: die Fehlermeldung so, wie Keycloak sie ausgibt.</figcaption>
+          </figure>
+        </section>
+        <section class="wel-slide" data-slide="2" aria-labelledby="welH2" hidden>
+          <div class="wel-text">
+            <h3 id="welH2">Theme hineinziehen – fertig</h3>
+            <p>Ein Theme-Ordner, ein ZIP oder ein Theme-JAR wird einfach <strong>auf das Fenster gezogen</strong>. Das Theme ist danach sofort ausgewählt.</p>
+            <ul>
+              <li>Knopf <strong>＋ Theme</strong> bzw. <strong>Themes</strong>: alle eigenen Themes mit Typ und Basis-Theme, „Login testen“, „E-Mails testen“, Ordner öffnen, Entfernen.</li>
+              <li><strong>Live-Neuladen</strong>: Sobald eine Datei im Theme-Ordner gespeichert wird, erscheint die Änderung in der Vorschau.</li>
+            </ul>
+          </div>
+          <figure>
+            <a href="/ui/welcome/03-themes.jpg" target="_blank" rel="noopener" title="Bild in voller Größe öffnen"><img src="/ui/welcome/03-themes.jpg" alt="Dialog „Themes importieren und auswählen“ mit Ablagefläche und Liste der Themes" loading="lazy"></a>
+            <figcaption>Themes importieren und auswählen.</figcaption>
+          </figure>
+        </section>
+        <section class="wel-slide" data-slide="3" aria-labelledby="welH3" hidden>
+          <div class="wel-text">
+            <h3 id="welH3">Mobil, Desktop und das Original daneben</h3>
+            <ul>
+              <li><strong>Mobil, Tablet, Desktop, Voll</strong>: Die Seite wird mit genau dieser Breite gerendert.</li>
+              <li><strong>Zoom</strong>: − / + / 100 % / <strong>Breite</strong> (an das Fenster anpassen). Tastatur: <kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd> <kbd>F</kbd>.</li>
+              <li><strong>Vergleich mit</strong> zeigt ein zweites Theme daneben, etwa das eigene neben <code>keycloak.v2</code>.</li>
+            </ul>
+          </div>
+          <figure>
+            <a href="/ui/welcome/04-vergleich.jpg" target="_blank" rel="noopener" title="Bild in voller Größe öffnen"><img src="/ui/welcome/04-vergleich.jpg" alt="Zwei Vorschauen nebeneinander in Mobilbreite: links das Beispiel-Theme, rechts keycloak.v2" loading="lazy"></a>
+            <figcaption>Vergleich in Mobilbreite: eigenes Theme und keycloak.v2.</figcaption>
+          </figure>
+        </section>
+        <section class="wel-slide" data-slide="4" aria-labelledby="welH4" hidden>
+          <div class="wel-text">
+            <h3 id="welH4">E-Mails wie im Postfach</h3>
+            <p>Unter <strong>E-Mails</strong> stehen alle Mails, die Keycloak verschickt – von „E-Mail bestätigen“ bis „Passwort zurücksetzen“.</p>
+            <ul>
+              <li>Betreff, Absender, Empfänger und Größe stehen über der Vorschau; <strong>HTML</strong> und <strong>Text</strong> lassen sich umschalten.</li>
+              <li>Hinweise für Mail-Programme: fehlender Aktionslink, Größe über 102 KB (Gmail kürzt), externe Stylesheets, Layout, das Outlook nicht kann.</li>
+            </ul>
+          </div>
+          <figure>
+            <a href="/ui/welcome/05-mail.jpg" target="_blank" rel="noopener" title="Bild in voller Größe öffnen"><img src="/ui/welcome/05-mail.jpg" alt="Vorschau der Mail „E-Mail-Adresse bestätigen“ mit Betreff und Absender darüber" loading="lazy"></a>
+            <figcaption>Mail „E-Mail-Adresse bestätigen“ im Beispiel-Theme.</figcaption>
+          </figure>
+        </section>
+        <section class="wel-slide" data-slide="5" aria-labelledby="welH5" hidden>
+          <div class="wel-text">
+            <h3 id="welH5">Alle Seiten auf einmal prüfen</h3>
+            <p><strong>Gesamtes Theme prüfen</strong> rendert nacheinander alle Seitenvarianten und alle Mails und listet die Befunde je Seite auf.</p>
+            <ul>
+              <li>Geprüft wird, was Keycloak im Betrieb tun würde: Template-Fehler (dann leere Seite mit Status 500), fehlende Textschlüssel, fehlende CSS-, JS- und Bilddateien, ein nicht auffindbares parent-Theme.</li>
+              <li>Das Ergebnis lässt sich als <strong>Bericht (Markdown)</strong> herunterladen.</li>
+            </ul>
+          </div>
+          <figure>
+            <a href="/ui/welcome/06-pruefung.jpg" target="_blank" rel="noopener" title="Bild in voller Größe öffnen"><img src="/ui/welcome/06-pruefung.jpg" alt="Tabelle der Gesamtprüfung: je Seite Fehler, Warnungen, Hinweise, WCAG-Verstöße und die wichtigsten Befunde" loading="lazy"></a>
+            <figcaption>Ausschnitt der Gesamtprüfung: je Seite die Anzahl der Befunde und die wichtigsten Meldungen, hier mit Barrierefreiheit.</figcaption>
+          </figure>
+        </section>
+        <section class="wel-slide" data-slide="6" aria-labelledby="welH6" hidden>
+          <div class="wel-text">
+            <h3 id="welH6">Barrierefreiheit nach WCAG 2.2 AA</h3>
+            <p class="wel-new">Neu in Version <span data-wel="version"></span></p>
+            <p>Das Modul <strong>Barrierefreiheit</strong> prüft die Vorschau gegen WCAG 2.2, Stufe AA, und markiert die Stellen direkt auf der Seite – ähnlich wie die Browser-Erweiterung WAVE.</p>
+            <ul>
+              <li>Sechs Kategorien: <span class="wel-ico" data-cat="error">✕</span> Fehler, <span class="wel-ico" data-cat="contrast">◐</span> Kontrastfehler, <span class="wel-ico" data-cat="alert">!</span> Hinweise, <span class="wel-ico" data-cat="feature">✓</span> Merkmale, <span class="wel-ico" data-cat="structure">≡</span> Struktur, <span class="wel-ico" data-cat="aria">A</span> ARIA.</li>
+              <li>Ein Klick auf ein Symbol zeigt, was das Problem ist, wie es sich beheben lässt und welches WCAG-Kriterium betroffen ist.</li>
+            </ul>
+          </div>
+          <figure>
+            <a href="/ui/welcome/07-barrierefreiheit.jpg" target="_blank" rel="noopener" title="Bild in voller Größe öffnen"><img src="/ui/welcome/07-barrierefreiheit.jpg" alt="Anmeldeseite mit farbigen Prüfsymbolen an den Formularfeldern, rechts die Referenz zum gewählten Befund" loading="lazy"></a>
+            <figcaption>Symbole auf der Seite und Referenz zum ausgewählten Befund.</figcaption>
+          </figure>
+        </section>
+        <section class="wel-slide" data-slide="7" aria-labelledby="welH7" hidden>
+          <div class="wel-text">
+            <h3 id="welH7">Reihenfolge, Struktur, Kontrast, Kriterien</h3>
+            <ul>
+              <li><strong>Reihenfolge</strong>: die Tab-Reihenfolge mit Rolle und Namen jedes Elements, auf Wunsch als Nummern auf der Seite.</li>
+              <li><strong>Struktur</strong>: Gliederung der Überschriften und Landmarks.</li>
+              <li><strong>Kontrast</strong>: alle Texte mit ihrem Kontrastverhältnis und ein Kontrastrechner.</li>
+              <li><strong>Kriterien</strong>: alle 55 Erfolgskriterien der Stufen A und AA mit Status.</li>
+              <li><strong>Styles aus</strong> und <strong>Graustufen</strong> zeigen die Seite ohne Gestaltung bzw. ohne Farbe.</li>
+            </ul>
+            <p class="wel-note">Automatische Prüfungen finden nur einen Teil der Probleme. „Ohne Befund“ heißt nicht „barrierefrei“ – die Kriterienliste zeigt, was von Hand zu prüfen ist.</p>
+          </div>
+          <figure>
+            <a href="/ui/welcome/08-kontrast.jpg" target="_blank" rel="noopener" title="Bild in voller Größe öffnen"><img src="/ui/welcome/08-kontrast.jpg" alt="Bereich Barrierefreiheit mit der Ansicht Kontrast: Kontrastrechner und Liste der Texte mit ihrem Kontrastverhältnis" loading="lazy"></a>
+            <figcaption>Ansicht „Kontrast“ mit Kontrastrechner.</figcaption>
+          </figure>
+        </section>
+        <section class="wel-slide" data-slide="8" aria-labelledby="welH8" hidden>
+          <div class="wel-text">
+            <h3 id="welH8">Realm-Einstellungen und Zusatzmodule</h3>
+            <ul>
+              <li><strong>Szenario</strong>: Realm-Einstellungen wie in der Admin-Konsole – Registrierung, „Angemeldet bleiben“, E-Mail als Benutzername, Sprachen, Passwort-Richtlinie. Jede Änderung wirkt sofort auf alle Vorschauen.</li>
+              <li><strong>Module</strong>: Zusatzfunktionen wie die Barrierefreiheitsprüfung aktivieren, deaktivieren oder entfernen. Der Zustand bleibt nach einem Neustart erhalten.</li>
+            </ul>
+          </div>
+          <figure>
+            <a href="/ui/welcome/09-szenario.jpg" target="_blank" rel="noopener" title="Bild in voller Größe öffnen"><img src="/ui/welcome/09-szenario.jpg" alt="Dialog „Szenario“ mit Schaltern für die Realm-Einstellungen" loading="lazy"></a>
+            <figcaption>Szenario: simulierte Realm-Einstellungen.</figcaption>
+          </figure>
+        </section>
+        </div>
+      </div>
+      <div class="wel-foot">
+        <label class="switch small"><input type="checkbox" id="welHide"> Beim Start nicht mehr zeigen (bis zur nächsten Version)</label>
+        <span class="muted small">Jederzeit wieder über „Überblick“ oben rechts · Bilder per Klick in voller Größe.</span>
+        <span class="wel-pager">
+          <button type="button" id="welPrev">Zurück</button>
+          <span id="welStep" class="small muted" aria-live="polite"></span>
+          <button type="button" id="welNext" class="primary">Weiter</button>
+        </span>
+      </div>
+    </div>
+  </dialog>
 
   <dialog id="dlgModules">
     <div class="dlg">

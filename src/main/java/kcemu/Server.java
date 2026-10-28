@@ -601,7 +601,9 @@ public class Server {
         String ct = res.endsWith(".html") ? "text/html; charset=utf-8"
                 : res.endsWith(".js") ? "text/javascript; charset=utf-8"
                 : res.endsWith(".css") ? "text/css; charset=utf-8"
-                : res.endsWith(".json") ? "application/json; charset=utf-8" : "application/octet-stream";
+                : res.endsWith(".json") ? "application/json; charset=utf-8"
+                : res.endsWith(".jpg") ? "image/jpeg"
+                : res.endsWith(".png") ? "image/png" : "application/octet-stream";
         ex.getResponseHeaders().set("Content-Type", ct);
         ex.getResponseHeaders().set("Cache-Control", "no-store");
         ex.sendResponseHeaders(200, data.length);

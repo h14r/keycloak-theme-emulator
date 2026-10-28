@@ -300,6 +300,12 @@ Template-Cache sind aus, Änderungen am Theme sind beim nächsten Laden sichtbar
 
 ## Oberfläche
 
+- **Überblick** beim Start: kurze Einführung in die Funktionen der aktuellen
+  Version mit Bildern aus der Anwendung. „Beim Start nicht mehr zeigen“ gilt
+  bis zur nächsten Version; der Knopf **Überblick** oben rechts öffnet ihn
+  jederzeit wieder. Die Bilder erzeugt `packaging/screenshots.js` aus der
+  laufenden Anwendung (siehe Kopf der Datei) – für eine neue Version einfach
+  neu ausführen.
 - **Formularseiten / E-Mails** links auswählen; jede Seite hat mehrere
   **Varianten** (Standard, Fehlerzustände, Erfolgsmeldungen …).
 - **Theme**: alle im Theme-Ordner und in Keycloak vorhandenen Themes.
