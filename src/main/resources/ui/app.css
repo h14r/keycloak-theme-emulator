@@ -181,3 +181,5 @@ table.audit td.n { text-align: right; font-variant-numeric: tabular-nums; }
 dialog:has(.dlg.wide) { max-width: min(1100px, 95vw); }
 .dlg.wide { max-width: 100%; }
 #themeTable td:last-child { white-space: normal; min-width: 210px; }
+.nowrap { white-space: nowrap; }
+#moduleTable td:last-child { white-space: nowrap; }

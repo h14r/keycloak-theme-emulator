@@ -1,5 +1,24 @@
 # Changelog – Keycloak Theme Emulator
 
+## [1.3.0] – 2026-10-28
+
+Barrierefreiheitsprüfung nach WCAG 2.2 AA als abschaltbares Modul.
+
+- Neues Modul „Barrierefreiheit (WCAG 2.2 AA)“, angelehnt an WAVE:
+  Symbole auf der Seite in sechs Kategorien (Fehler, Kontrastfehler,
+  Hinweise, Merkmale, Struktur, ARIA), Ansichten Übersicht, Details mit
+  Referenz, Reihenfolge, Struktur, Kontrast (mit Kontrastrechner) und
+  Kriterien (alle 55 Erfolgskriterien A/AA mit Status), „Styles aus“,
+  „Graustufen“, Bericht als Markdown
+- Prüfmaschine axe-core 4.11.3 mit WCAG-2.0/2.1/2.2-A/AA- und
+  Best-Practice-Regeln, Meldungen auf Deutsch
+- Modulverwaltung (Knopf „Module“): aktivieren, deaktivieren, entfernen,
+  wiederherstellen; Zustand in `modules-state.json`
+- „Gesamtes Theme prüfen“ nimmt die Prüfungen aktiver Module auf (Spalte
+  „WCAG-Verstöße“)
+- Die bisherige Schaltfläche „Barrierefreiheit prüfen (axe-core)“ ist im
+  Modul aufgegangen
+
 ## [1.2.0] – 2026-10-28
 
 Zoom und Anpassen an die Fensterbreite.

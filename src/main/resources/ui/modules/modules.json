@@ -1,0 +1,12 @@
+{
+  "modules": [
+    {
+      "id": "a11y",
+      "name": "Barrierefreiheit (WCAG 2.2 AA)",
+      "version": "1.0.0",
+      "description": "Prüft die Vorschau gegen WCAG 2.2 Stufe A und AA (axe-core), zeigt Fehler, Kontrastfehler, Hinweise, Merkmale, Struktur und ARIA wie WAVE direkt auf der Seite, dazu Tab-Reihenfolge, Gliederung, Kontrastrechner und Kriterienliste.",
+      "css": true,
+      "enabledByDefault": true
+    }
+  ]
+}

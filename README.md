@@ -23,6 +23,8 @@ festhalten.
 - [Oberfläche](#oberfläche)
 - [Abgedeckte Seiten und E-Mails](#abgedeckte-seiten-und-e-mails)
 - [Prüfungen](#prüfungen)
+- [Modul Barrierefreiheit (WCAG 2.2 AA)](#modul-barrierefreiheit-wcag-22-aa)
+- [Module aktivieren, deaktivieren, entfernen](#module-aktivieren-deaktivieren-entfernen)
 - [Szenario (simulierte Realm-Einstellungen)](#szenario-simulierte-realm-einstellungen)
 - [Eigenes Theme anlegen](#eigenes-theme-anlegen)
 - [Prüfung auf der Kommandozeile (CI)](#prüfung-auf-der-kommandozeile-ci)
@@ -319,11 +321,13 @@ Template-Cache sind aus, Änderungen am Theme sind beim nächsten Laden sichtbar
   vergessen?“ führen zur passenden Seite. Abgeschickte Formulare zeigen die
   übermittelten Felder (gelb markierter Hinweis des Emulators – keine
   Keycloak-Ausgabe).
-- **Bewertung** (rechts): Befunde der Prüfungen, Barrierefreiheitsprüfung
-  (axe-core, läuft lokal), Theme-Kette mit den eigenen Dateien, verfügbare
-  Template-Variablen und abgefragte Textschlüssel.
+- **Bewertung** (rechts): Befunde der Prüfungen, Theme-Kette mit den eigenen
+  Dateien, verfügbare Template-Variablen und abgefragte Textschlüssel;
+  darunter die Bereiche aktiver Module (z. B. Barrierefreiheit).
 - **Gesamtes Theme prüfen**: alle Varianten und Mails nacheinander, optional
-  mit Barrierefreiheit; Ergebnis als Markdown-Bericht herunterladbar.
+  mit den Prüfungen aktiver Module; Ergebnis als Markdown-Bericht
+  herunterladbar.
+- **Module**: Zusatzmodule aktivieren, deaktivieren oder entfernen.
 - **Szenario**: Realm-Schalter (Registrierung, „Angemeldet bleiben“, E-Mail
   als Benutzername …) und das vollständige Szenario als JSON bearbeiten.
 
@@ -379,9 +383,92 @@ oder als **Heuristik** markiert (Erfahrungsregel).
 | `styles`, `scripts`, `stylesCommon`, `scriptsCommon` verweisen auf nicht vorhandene Dateien; im Browser zusätzlich alle eingebundenen CSS/JS/Bilder (HTTP-Status) | Keycloak-Verhalten |
 | Fehlender Textschlüssel (Keycloak zeigt dann den Schlüssel selbst an); Kennzeichnung, wenn er auch im Original-Theme fehlt | Keycloak-Verhalten |
 | Möglicherweise unübersetzter Text (identisch mit dem englischen Bündel) | Heuristik |
-| Barrierefreiheit (axe-core 4.11, WCAG-Regeln) | Prüfwerkzeug |
+| Barrierefreiheit nach WCAG 2.2 AA – im [Modul Barrierefreiheit](#modul-barrierefreiheit-wcag-22-aa) | Prüfwerkzeug (axe-core 4.11) |
 | Mail: Aktionslink fehlt im HTML- oder Text-Teil, leerer Betreff/Text-Teil, Bilder mit relativer Adresse | Keycloak-Verhalten / Mail-Clients |
 | Mail: > 102 KB (Gmail kürzt), externe Stylesheets, `<script>`, flex/grid/position (Outlook), data:-Bilder, fehlende `alt`-Texte, langer Betreff | Heuristik |
+
+---
+
+## Modul Barrierefreiheit (WCAG 2.2 AA)
+
+Prüft die angezeigte Seite bzw. Mail gegen **WCAG 2.2, Stufe AA** (also alle
+Erfolgskriterien der Stufen A und AA) und stellt das Ergebnis ähnlich wie die
+Browser-Erweiterung **WAVE** von WebAIM dar. Grundlage ist die
+Prüfbibliothek **axe-core 4.11.3** (läuft lokal im Browser, Regeln mit den
+Tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`, `wcag22aa` sowie
+`best-practice`; deutsche Meldungstexte von axe-core).
+
+**Symbole auf der Seite** – wie bei WAVE in sechs Kategorien, einzeln
+ein-/ausblendbar. Ein Klick auf ein Symbol öffnet die Referenz dazu:
+
+| Kategorie | Inhalt |
+|---|---|
+| ✕ Fehler | Verstöße gegen WCAG 2.2 A/AA, die axe-core sicher erkennt |
+| ◐ Kontrastfehler | Text unter 4,5:1 bzw. 3:1 (großer Text), Kriterium 1.4.3 |
+| ! Hinweise | von axe-core als „manuell prüfen“ gemeldet, Best-Practice-Regeln ohne WCAG-Zuordnung und einige eigene, als *Heuristik* gekennzeichnete Hinweise (z. B. fehlendes `autocomplete` bei Benutzername/E-Mail/Passwort → 1.3.5, Tabellen ohne Kopfzellen, sehr kleine Schrift, Links in neuem Fenster) |
+| ✓ Merkmale | vorhandene Alternativtexte, beschriftete Felder, Gruppen mit Legende, `lang`, `autocomplete`, Sprunglink |
+| ≡ Struktur | Überschriften, Landmarks, Listen, Tabellen |
+| A ARIA | Elemente mit `role` oder `aria-*` (Live-Regionen, `aria-hidden`, `aria-invalid` …) |
+
+**Ansichten** im Bereich „Barrierefreiheit“:
+
+- **Übersicht** – Anzahl je Kategorie und Stand der 55 WCAG-Kriterien
+  (Verstoß · Prüfen · automatisch ohne Befund · nicht anwendbar · nur manuell)
+- **Details** – alle Befunde gruppiert; Klick markiert das Element in der
+  Vorschau und zeigt die **Referenz**: Beschreibung, „So beheben“, HTML des
+  Elements, zugehörige WCAG-Kriterien mit Link auf „Understanding WCAG 2.2“
+- **Reihenfolge** – Tab-Reihenfolge mit Rolle und zugänglichem Namen,
+  optional als Nummern auf der Seite (2.4.3)
+- **Struktur** – Gliederung der Überschriften (übersprungene Ebenen und leere
+  Überschriften markiert) und Landmarks
+- **Kontrast** – alle geprüften Texte mit Farben und Verhältnis; Kontrastrechner
+  mit Farbwählern und Bewertung für normalen Text (4,5:1), großen Text (3:1)
+  und Bedienelemente/Grafiken (1.4.11, 3:1)
+- **Kriterien** – alle Erfolgskriterien A/AA mit Stufe, Status und den
+  zugeordneten axe-Regeln
+
+Dazu wie bei WAVE **Styles aus** (Seite ohne CSS – zeigt die Lesereihenfolge)
+und **Graustufen** (Information nur über Farbe? → 1.4.1), außerdem
+**Bericht** (Markdown für die aktuelle Seite). Mit **automatisch** wird jede
+neue Vorschau sofort geprüft. In „Gesamtes Theme prüfen“ zählt die Spalte
+**WCAG-Verstöße** die verletzten Kriterien je Seite/Mail.
+
+Bei E-Mails sind die seitenbezogenen Regeln (Seitentitel, Landmarks, H1,
+`lang` am `<html>`) ausgeschaltet; der Text-Teil einer Mail wird nicht
+geprüft.
+
+> **Wichtig:** Automatische Prüfungen erkennen nur einen Teil der
+> WCAG-Anforderungen – das gilt für WAVE genauso wie für axe-core. „Ohne
+> Befund“ bedeutet nicht „barrierefrei“. Die
+> Kriterienliste zeigt, was zusätzlich von Hand zu prüfen ist – z. B.
+> Tastaturbedienung (2.1.1), sichtbarer Fokus (2.4.7), Umbruch bei 320 px
+> (1.4.10), Textabstände (1.4.12), Fehlermeldungen und -vorschläge (3.3.1,
+> 3.3.3) und barrierefreie Anmeldung ohne kognitiven Test (3.3.8).
+
+Die Vorschau wird nur für die Darstellung verändert (Symbole liegen in einer
+eigenen Ebene); Deaktivieren des Moduls stellt sie vollständig wieder her.
+
+---
+
+## Module aktivieren, deaktivieren, entfernen
+
+Zusatzfunktionen wie die Barrierefreiheitsprüfung sind **Module**. Knopf
+**Module** oben rechts:
+
+- **aktiv** an/aus – blendet das Modul sofort ein oder aus, ohne Neuladen.
+- **Entfernen** – das Modul wird nicht mehr geladen und vom Emulator nicht
+  mehr ausgeliefert. **Wiederherstellen** holt es zurück.
+
+Der Zustand steht in `modules-state.json` neben `scenario.json` (bei der
+Mac-App im Arbeitsordner) und gilt auch nach einem Neustart.
+
+Für Entwickler – Modul **endgültig aus dem Quellcode löschen**: Ordner
+`src/main/resources/ui/modules/<id>/` und den Eintrag in
+`src/main/resources/ui/modules/modules.json` entfernen. Der Emulator läuft
+ohne das Modul unverändert weiter (geprüft). Ein neues Modul ist ein Ordner
+mit `module.js` (meldet sich mit `KCEMU.register({...})` an, Schnittstelle
+am Anfang des Abschnitts „Module“ in `ui/app.js` beschrieben) und optional
+`module.css`.
 
 ---
 

@@ -19,6 +19,7 @@
       </label>
       <button type="button" id="btnThemes" title="Themes importieren und zum Testen auswählen">Themes</button>
       <button type="button" id="btnScenario">Szenario</button>
+      <button type="button" id="btnModules" title="Zusatzmodule aktivieren, deaktivieren oder entfernen" hidden>Module</button>
       <button type="button" id="btnAudit" class="primary">Gesamtes Theme prüfen</button>
     </div>
   </header>
@@ -89,11 +90,8 @@
         <p class="muted small" id="trigger"></p>
         <div class="counts" id="counts"></div>
         <ul class="findings" id="findings"></ul>
-        <div class="row">
-          <button type="button" id="btnA11y">Barrierefreiheit prüfen (axe-core)</button>
-        </div>
-        <ul class="findings" id="a11y"></ul>
       </section>
+      <div id="modulePanels"></div>
       <section>
         <h2>Theme-Kette</h2>
         <p class="muted small">Auflösung wie im Server: Theme → import → parent → …</p>
@@ -146,11 +144,24 @@
 
   <div class="dropveil" id="dropveil" hidden><div>Theme loslassen zum Importieren</div></div>
 
+  <dialog id="dlgModules">
+    <div class="dlg">
+      <h2>Module</h2>
+      <p class="muted small">Zusatzfunktionen des Emulators. <em>Deaktivieren</em> blendet ein Modul sofort aus (wieder einschaltbar),
+        <em>Entfernen</em> lädt und liefert es nicht mehr aus (Wiederherstellen möglich). Der Zustand gilt auch nach einem Neustart.</p>
+      <table class="audit" id="moduleTable"></table>
+      <div class="row end"><button type="button" id="modulesClose">Schließen</button></div>
+    </div>
+  </dialog>
+
   <dialog id="dlgAudit">
     <div class="dlg wide">
       <h2>Prüfung des gesamten Themes</h2>
       <p class="muted small" id="auditInfo"></p>
-      <label class="switch"><input type="checkbox" id="auditA11y" checked> inkl. Barrierefreiheit (langsamer)</label>
+      <div class="row wrap">
+        <label class="switch"><input type="checkbox" id="auditRes" checked> Ressourcen im Browser prüfen</label>
+        <span id="auditModules" class="row wrap"></span>
+      </div>
       <div class="row">
         <button type="button" id="auditRun" class="primary">Starten</button>
         <button type="button" id="auditDownload" disabled>Bericht (Markdown) herunterladen</button>

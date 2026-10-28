@@ -40,6 +40,8 @@ async function init() {
   showList();
   select(state.mode, state.id, state.variant);
   setInterval(pollStamp, 1500);
+  bindModules();
+  await loadModules();
 }
 
 function persist() {
@@ -210,7 +212,7 @@ async function render() {
     $('cap2').textContent = t2;
   }
   applyWidth();
-  $('a11y').innerHTML = '';
+  moduleCall('onRender');
   state.resourceFindings = [];
   const rep = await (await fetch(url('api', t1))).json();
   state.report = rep;
@@ -271,34 +273,6 @@ async function checkResources(frame) {
     } catch (e) { /* Netzwerkfehler ignorieren */ }
   }));
   return out;
-}
-
-/** Seitenbezogene Regeln, die für E-Mail-HTML nicht gelten (kein Dokument im Browser-Sinn). */
-const MAIL_AXE_OFF = ['document-title', 'landmark-one-main', 'page-has-heading-one', 'region', 'html-has-lang'];
-
-async function runAxe(frame, isMail) {
-  const doc = frame.contentDocument;
-  const win = frame.contentWindow;
-  if (!doc || !win) return [];
-  if (!win.axe) {
-    await new Promise((res, rej) => {
-      const s = doc.createElement('script');
-      s.src = '/vendor/axe.min.js';
-      s.onload = res;
-      s.onerror = rej;
-      doc.head.appendChild(s);
-    });
-  }
-  const opts = { resultTypes: ['violations'] };
-  if (isMail) opts.rules = Object.fromEntries(MAIL_AXE_OFF.map((r) => [r, { enabled: false }]));
-  const r = await win.axe.run(doc, opts);
-  return r.violations.map((v) => ({
-    level: v.impact === 'critical' || v.impact === 'serious' ? 'error' : 'warning',
-    area: 'Barrierefreiheit · ' + (v.impact || ''),
-    message: v.help + ` (${v.nodes.length}×)`,
-    detail: v.nodes.slice(0, 3).map((n) => n.target.join(' ') + (n.failureSummary ? '\n' + n.failureSummary : '')).join('\n\n') + '\n' + v.helpUrl,
-    heuristic: false,
-  }));
 }
 
 // ------------------------------------------------------------------ Szenario
@@ -368,7 +342,9 @@ async function saveScenario(persistFile) {
 let auditRows = [];
 
 async function runAudit() {
-  const withA11y = $('auditA11y').checked;
+  // Prüfungen aktiver Module, die im Dialog angehakt sind
+  const extra = activeModules().filter((m) => m.audit && $('auditMod-' + m.id)?.checked);
+  const needFrame = extra.length > 0 || $('auditRes').checked;
   const jobs = [];
   for (const p of state.catalog.pages) for (const v of p.variants) jobs.push({ mode: 'page', id: p.id, variant: v.id, label: `${p.label} – ${v.label}`, template: p.template });
   for (const m of state.catalog.mails) jobs.push({ mode: 'mail', id: m.id, label: m.label, template: m.template });
@@ -377,7 +353,8 @@ async function runAudit() {
   $('auditRun').disabled = true;
   auditRows = [];
   const tbl = $('auditTable');
-  tbl.innerHTML = '<tr><th>Seite / Mail</th><th>Template</th><th class="n">Fehler</th><th class="n">Warn.</th><th class="n">Hinw.</th><th class="n">A11y</th><th>Wichtigste Befunde</th></tr>';
+  tbl.innerHTML = '<tr><th>Seite / Mail</th><th>Template</th><th class="n">Fehler</th><th class="n">Warn.</th><th class="n">Hinw.</th>'
+    + extra.map((m) => `<th class="n">${esc(m.audit.column)}</th>`).join('') + '<th>Wichtigste Befunde</th></tr>';
   const locale = state.locale;
   for (const j of jobs) {
     const theme = j.mode === 'page' ? state.theme.page : state.theme.mail;
@@ -393,21 +370,28 @@ async function runAudit() {
     } catch (e) {
       findings = [{ level: 'error', area: 'Emulator', message: String(e) }];
     }
-    let a11y = [];
-    if (withA11y) {
+    const mods = [];
+    if (needFrame) {
       const f = $('auditFrame');
       await new Promise((res) => { f.onload = res; f.src = '/render/' + base + j.id + '?' + p; });
-      try {
-        findings = findings.concat(await checkResources(f));
-        a11y = await runAxe(f, j.mode === 'mail');
-      } catch (e) { a11y = [{ level: 'warning', area: 'Barrierefreiheit', message: 'axe-core konnte nicht laufen: ' + e }]; }
+      if ($('auditRes').checked) findings = findings.concat(await checkResources(f));
+      for (const m of extra) {
+        let r;
+        try {
+          r = await m.audit.run(f, { isMail: j.mode === 'mail' });
+        } catch (e) {
+          r = { findings: [{ level: 'warning', area: m.name, message: 'Prüfung konnte nicht laufen: ' + e }], cell: '?' };
+        }
+        mods.push({ module: m.id, column: m.audit.column, ...r });
+      }
     }
-    const all = findings.concat(a11y);
+    const all = findings.concat(...mods.map((x) => x.findings));
     const n = (lvl) => findings.filter((x) => x.level === lvl).length;
-    const row = { ...j, theme, errors: n('error'), warnings: n('warning'), infos: n('info'), a11y: a11y.length, findings: all };
+    const row = { ...j, theme, errors: n('error'), warnings: n('warning'), infos: n('info'), modules: mods, findings: all };
     auditRows.push(row);
     const top = all.filter((x) => x.level !== 'info').slice(0, 3).map((x) => esc(x.message)).join('<br>');
-    tbl.insertAdjacentHTML('beforeend', `<tr><td>${esc(j.label)}</td><td>${esc(j.template)}</td><td class="n">${row.errors}</td><td class="n">${row.warnings}</td><td class="n">${row.infos}</td><td class="n">${withA11y ? row.a11y : '–'}</td><td class="small">${top}</td></tr>`);
+    tbl.insertAdjacentHTML('beforeend', `<tr><td>${esc(j.label)}</td><td>${esc(j.template)}</td><td class="n">${row.errors}</td><td class="n">${row.warnings}</td><td class="n">${row.infos}</td>`
+      + mods.map((x) => `<td class="n">${esc(x.cell)}</td>`).join('') + `<td class="small">${top}</td></tr>`);
     prog.value++;
   }
   $('auditRun').disabled = false;
@@ -418,8 +402,10 @@ function downloadAudit() {
   const sc = state.catalog.scenario;
   let md = `# Theme-Prüfbericht\n\n- Login-Theme: ${state.theme.page}\n- E-Mail-Theme: ${state.theme.mail}\n- Keycloak: ${state.catalog.keycloakVersion}\n`
     + `- Sprache: ${state.locale || 'automatisch (' + sc.acceptLanguage + ')'}\n- Erstellt: ${new Date().toLocaleString('de-DE')}\n\n`;
-  md += '| Seite / Mail | Template | Fehler | Warnungen | Hinweise | A11y |\n|---|---|---:|---:|---:|---:|\n';
-  for (const r of auditRows) md += `| ${r.label} | ${r.template} | ${r.errors} | ${r.warnings} | ${r.infos} | ${r.a11y} |\n`;
+  const cols = (auditRows[0]?.modules || []).map((x) => x.column);
+  md += '| Seite / Mail | Template | Fehler | Warnungen | Hinweise |' + cols.map((c) => ` ${c} |`).join('')
+    + '\n|---|---|---:|---:|---:|' + cols.map(() => '---:|').join('') + '\n';
+  for (const r of auditRows) md += `| ${r.label} | ${r.template} | ${r.errors} | ${r.warnings} | ${r.infos} |` + r.modules.map((x) => ` ${x.cell} |`).join('') + '\n';
   md += '\n## Befunde im Einzelnen\n';
   for (const r of auditRows) {
     if (!r.findings.length) continue;
@@ -632,6 +618,162 @@ function bindThemes() {
   dz.addEventListener('dragleave', () => dz.classList.remove('over'));
 }
 
+// ------------------------------------------------------------------ Module
+
+/*
+ * Optionale Module (Ordner ui/modules/{id}/ mit module.js und optional module.css, eingetragen
+ * in ui/modules/modules.json). Ein Modul meldet sich mit KCEMU.register({...}) an:
+ *   id, name
+ *   mount(ctx)        Oberfläche aufbauen; ctx.panel ist ein eigener Abschnitt im Bewertungsbereich
+ *   unmount()         alles wieder entfernen (auch Änderungen an der Vorschau)
+ *   onRender()        eine neue Vorschau wird geladen
+ *   onPreview(frame)  die Vorschau ist geladen
+ *   audit             { label, column, run(frame, {isMail}) → {findings, cell} } für „Gesamtes Theme prüfen“
+ * Fehlt ein Modul oder wirft es Fehler, läuft der Emulator ohne es weiter.
+ */
+const modules = { info: [], defs: {}, active: new Set(), waiting: {} };
+
+window.KCEMU = {
+  register(def) {
+    modules.defs[def.id] = def;
+    if (modules.waiting[def.id]) { modules.waiting[def.id](); delete modules.waiting[def.id]; }
+  },
+  api: {
+    $, esc, renderFindings,
+    get mode() { return state.mode; },
+    get part() { return state.part; },
+    get theme() { return state.theme[state.mode]; },
+    get pageId() { return state.id; },
+    get variant() { return state.variant; },
+    get label() {
+      const c = state.catalog;
+      const it = state.mode === 'page' ? c.pages.find((p) => p.id === state.id) : c.mails.find((m) => m.id === state.id);
+      return it ? it.label : state.id;
+    },
+    preview: () => $('f1'),
+  },
+};
+
+function activeModules() {
+  return [...modules.active].map((id) => modules.defs[id]).filter(Boolean);
+}
+
+function moduleCall(hook, ...args) {
+  for (const m of activeModules()) {
+    if (typeof m[hook] !== 'function') continue;
+    try {
+      const r = m[hook](...args);
+      if (r && r.catch) r.catch((e) => console.error(`Modul ${m.id}.${hook}:`, e));
+    } catch (e) { console.error(`Modul ${m.id}.${hook}:`, e); }
+  }
+}
+
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = res;
+    s.onerror = () => rej(new Error('nicht ladbar: ' + src));
+    document.head.appendChild(s);
+  });
+}
+
+async function loadModules() {
+  try {
+    modules.info = (await (await fetch('/api/modules')).json()).modules || [];
+  } catch (e) { modules.info = []; }
+  $('btnModules').hidden = modules.info.length === 0;
+  for (const m of modules.info) if (m.enabled && !m.removed) await activateModule(m.id);
+}
+
+async function activateModule(id) {
+  const info = modules.info.find((m) => m.id === id);
+  if (!info || modules.active.has(id)) return;
+  try {
+    if (info.css && !document.querySelector(`link[data-module="${id}"]`)) {
+      const l = document.createElement('link');
+      l.rel = 'stylesheet';
+      l.href = `/ui/modules/${id}/module.css?v=${encodeURIComponent(info.version)}`;
+      l.dataset.module = id;
+      document.head.appendChild(l);
+    }
+    if (!modules.defs[id]) {
+      const registered = new Promise((res) => { modules.waiting[id] = res; });
+      await loadScript(`/ui/modules/${id}/module.js?v=${encodeURIComponent(info.version)}`);
+      await Promise.race([registered, new Promise((_, rej) => setTimeout(() => rej(new Error('Modul hat sich nicht angemeldet')), 3000))]);
+    }
+    const def = modules.defs[id];
+    const panel = document.createElement('section');
+    panel.className = 'module';
+    panel.dataset.module = id;
+    $('modulePanels').appendChild(panel);
+    def.panel = panel;
+    def.mount({ panel, api: window.KCEMU.api });
+    modules.active.add(id);
+    // Vorschau schon geladen (nicht das leere about:blank vor dem ersten Laden)
+    const d = $('f1').contentDocument;
+    if (d && d.readyState === 'complete' && d.location.href !== 'about:blank' && typeof def.onPreview === 'function') def.onPreview($('f1'));
+  } catch (e) {
+    console.error('Modul ' + id + ':', e);
+    document.querySelector(`[data-module="${id}"]`)?.remove();
+    info.error = String(e.message || e);
+  }
+}
+
+function deactivateModule(id) {
+  const def = modules.defs[id];
+  if (!modules.active.has(id)) return;
+  modules.active.delete(id);
+  try { def.unmount?.(); } catch (e) { console.error('Modul ' + id + ':', e); }
+  def.panel?.remove();
+  document.querySelector(`link[data-module="${id}"]`)?.remove();
+}
+
+async function setModule(id, change) {
+  const r = await fetch('/api/modules/' + encodeURIComponent(id), {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(change),
+  });
+  if (r.ok) modules.info = (await r.json()).modules;
+  const info = modules.info.find((m) => m.id === id);
+  if (info && info.enabled && !info.removed) await activateModule(id); else deactivateModule(id);
+  showModules();
+}
+
+function showModules() {
+  $('moduleTable').innerHTML = '<tr><th>Modul</th><th>Status</th><th></th></tr>' + modules.info.map((m) => {
+    const status = m.removed ? 'entfernt' : m.enabled ? (modules.active.has(m.id) ? 'aktiv' : 'aktiv – Fehler beim Laden') : 'deaktiviert';
+    return `<tr><td><strong>${esc(m.name)}</strong> <span class="muted small">${esc(m.version)}</span><div class="small muted">${esc(m.description)}</div>`
+      + (m.error ? `<div class="small error">${esc(m.error)}</div>` : '') + '</td>'
+      + `<td class="small">${status}</td><td class="nowrap">`
+      + (m.removed
+        ? `<button type="button" data-restore="${esc(m.id)}">Wiederherstellen</button>`
+        : `<label class="switch"><input type="checkbox" data-toggle="${esc(m.id)}" ${m.enabled ? 'checked' : ''}> aktiv</label>`
+          + ` <button type="button" data-remove="${esc(m.id)}">Entfernen</button>`)
+      + '</td></tr>';
+  }).join('');
+}
+
+function bindModules() {
+  $('btnModules').onclick = () => { showModules(); $('dlgModules').showModal(); };
+  $('modulesClose').onclick = () => $('dlgModules').close();
+  $('moduleTable').onchange = (e) => {
+    const t = e.target.closest('[data-toggle]');
+    if (t) setModule(t.dataset.toggle, { enabled: t.checked });
+  };
+  $('moduleTable').onclick = (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.remove) {
+      const m = modules.info.find((x) => x.id === b.dataset.remove);
+      if (confirm(`Modul „${m.name}“ entfernen?\nEs wird nicht mehr geladen und nicht mehr ausgeliefert. Über „Wiederherstellen“ lässt es sich zurückholen.`)) {
+        setModule(m.id, { removed: true });
+      }
+    } else if (b.dataset.restore) {
+      setModule(b.dataset.restore, { removed: false, enabled: true });
+    }
+  };
+}
+
 // ------------------------------------------------------------------ Live-Neuladen
 
 async function pollStamp() {
@@ -690,25 +832,17 @@ function bind() {
     render();
   };
   $('f1').addEventListener('load', async () => {
+    moduleCall('onPreview', $('f1'));
     state.resourceFindings = await checkResources($('f1'));
     showReport();
   });
-  $('btnA11y').onclick = async () => {
-    $('btnA11y').disabled = true;
-    try {
-      const v = await runAxe($('f1'), state.mode === 'mail');
-      renderFindings($('a11y'), v.length ? v : [{ level: 'ok', area: 'Barrierefreiheit', message: 'axe-core: keine Verstöße gefunden' }]);
-    } catch (e) {
-      renderFindings($('a11y'), [{ level: 'warning', area: 'Barrierefreiheit', message: 'axe-core konnte nicht laufen: ' + e }]);
-    }
-    $('btnA11y').disabled = false;
-  };
   $('btnScenario').onclick = openScenario;
   $('flags').onchange = syncFlagsToJson;
   $('scApply').onclick = () => saveScenario(false);
   $('scSave').onclick = () => saveScenario(true);
   $('btnAudit').onclick = () => {
     $('auditInfo').textContent = `Login-Theme „${state.theme.page}“, E-Mail-Theme „${state.theme.mail}“, Sprache ${state.locale || 'automatisch'} – alle Seitenvarianten und Mails.`;
+    $('auditModules').innerHTML = activeModules().filter((m) => m.audit).map((m) => `<label class="switch"><input type="checkbox" id="auditMod-${esc(m.id)}" checked> ${esc(m.audit.label)}</label>`).join('');
     $('dlgAudit').showModal();
   };
   $('auditRun').onclick = runAudit;
