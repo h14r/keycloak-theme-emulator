@@ -14,6 +14,7 @@ festhalten.
 ## Inhalt
 
 - [Installation auf dem Mac (.dmg)](#installation-auf-dem-mac-dmg)
+- [Installation unter Windows (.msi)](#installation-unter-windows-msi)
 - [Ohne Installation im Browser (portables ZIP)](#ohne-installation-im-browser-portables-zip)
 - [Neue Themes importieren und auswählen](#neue-themes-importieren-und-auswählen)
 - [Auf eine neue Version aktualisieren](#auf-eine-neue-version-aktualisieren)
@@ -23,6 +24,8 @@ festhalten.
 - [Oberfläche](#oberfläche)
 - [Abgedeckte Seiten und E-Mails](#abgedeckte-seiten-und-e-mails)
 - [Prüfungen](#prüfungen)
+- [Modul Barrierefreiheit (WCAG 2.2 AA)](#modul-barrierefreiheit-wcag-22-aa)
+- [Module aktivieren, deaktivieren, entfernen](#module-aktivieren-deaktivieren-entfernen)
 - [Szenario (simulierte Realm-Einstellungen)](#szenario-simulierte-realm-einstellungen)
 - [Eigenes Theme anlegen](#eigenes-theme-anlegen)
 - [Prüfung auf der Kommandozeile (CI)](#prüfung-auf-der-kommandozeile-ci)
@@ -42,7 +45,7 @@ nicht nötig.
 - `Keycloak-Theme-Emulator-<version>-arm64.dmg` – Apple Silicon (M1–M4)
 - `Keycloak-Theme-Emulator-<version>-x64.dmg` – Intel-Mac
 
-Die Dateien entstehen über GitHub Actions (Workflow „Pakete (.dmg und
+Die Dateien entstehen über GitHub Actions (Workflow „Pakete (.dmg, .msi und
 portable ZIP)“). Sobald auf `main` eine neue Version (aus `pom.xml`)
 ankommt, legt der Workflow automatisch das Release `v<version>` an.
 
@@ -128,9 +131,84 @@ packaging/build-installer.sh dmg     # Ergebnis: target/installer/*.dmg
 
 ---
 
+## Installation unter Windows (.msi)
+
+Der Installer bringt die Java-Laufzeit mit – Java oder Maven sind nicht
+nötig. Installiert wird **für den angemeldeten Benutzer, ohne
+Administratorrechte**, mit Eintrag im Startmenü und Verknüpfung auf dem
+Desktop. Windows 10 oder 11, 64 Bit (x64).
+
+**Herunterladen** (ohne GitHub-Anmeldung):
+<https://github.com/h14r/keycloak-theme-emulator/releases/latest> →
+`Keycloak-Theme-Emulator-<version>-windows-x64.msi`
+
+**Installieren ohne Sicherheitswarnung (empfohlen):** In *PowerShell*
+(Startmenü → „PowerShell“) eingeben:
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/h14r/keycloak-theme-emulator/main/install-windows.ps1 | iex"
+```
+
+Das Skript ([install-windows.ps1](./install-windows.ps1)) lädt die `.msi`
+aus dem neuesten Release, installiert sie und startet die App. Per
+PowerShell geladene Dateien tragen keine Internet-Markierung – Windows zeigt
+deshalb die SmartScreen-Meldung nicht an. Für Updates denselben Befehl erneut
+ausführen.
+
+**Installieren per Download:** `.msi` im Browser laden und doppelklicken.
+Solange der Installer nicht signiert ist (siehe
+[Windows: signieren](#windows-signieren)), meldet Windows beim ersten
+Öffnen „Der Computer wurde durch Windows geschützt“. Dann auf *Weitere
+Informationen* → *Trotzdem ausführen* klicken. Alternativ vorher:
+Rechtsklick auf die `.msi` → *Eigenschaften* → unten *Zulassen* anhaken →
+*OK*. Manche Browser fragen schon beim Download nach, ob die Datei behalten
+werden soll („wird nicht häufig heruntergeladen“) → *Beibehalten*.
+
+Der Assistent fragt nach dem Installationsordner (Voreinstellung im
+Benutzerprofil) und legt den Startmenü-Eintrag *Keycloak Theme Emulator* an.
+
+**Benutzung:** wie beim Mac – nach dem Start öffnen sich ein kleines Fenster
+und der Browser mit der Oberfläche. Der Arbeitsordner liegt unter
+`C:\Users\<Name>\Keycloak Theme Emulator` (Themes, `scenario.json`,
+`emulator.log`). „Theme-Ordner öffnen“ zeigt ihn im Explorer; Fenster
+schließen oder „Beenden“ stoppt den Emulator.
+
+**Deinstallieren:** *Einstellungen → Apps → Installierte Apps* →
+*Keycloak Theme Emulator* → *Deinstallieren*. Der Arbeitsordner mit den
+eigenen Themes bleibt dabei erhalten.
+
+### Windows: signieren
+
+Damit SmartScreen auch beim Browser-Download nicht warnt, muss die `.msi`
+mit einem **Code-Signing-Zertifikat** signiert sein. Der Workflow signiert
+automatisch (`signtool`, SHA-256, Zeitstempel), sobald diese
+Repository-Secrets gesetzt sind:
+
+| Secret | Inhalt |
+|---|---|
+| `WINDOWS_CERTIFICATE_PFX` | Code-Signing-Zertifikat samt privatem Schlüssel als `.pfx`, Base64-kodiert (PowerShell: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("zertifikat.pfx"))`) |
+| `WINDOWS_CERTIFICATE_PASSWORD` | Passwort der `.pfx`-Datei |
+
+Hinweis: SmartScreen bewertet auch die „Reputation“. Bei einem neuen
+Zertifikat kann die Warnung anfangs trotz Signatur noch erscheinen, bis
+genug Downloads zusammengekommen sind. Zertifikate, deren Schlüssel nur auf
+Hardware bzw. in einem Cloud-Dienst liegen darf (heute bei vielen Anbietern
+üblich), lassen sich nicht als `.pfx` hinterlegen – dann muss der
+Signierschritt an den jeweiligen Dienst angepasst werden. Der Signierschritt
+ist mangels Zertifikat noch nicht praktisch erprobt.
+
+**Selbst bauen** (unter Windows mit JDK 21, Maven, Git Bash und
+[WiX Toolset 3](https://github.com/wixtoolset/wix3/releases)):
+
+```bash
+packaging/build-installer.sh msi     # Ergebnis: target/installer/*.msi
+```
+
+---
+
 ## Ohne Installation im Browser (portables ZIP)
 
-Alternative zur Mac-App, ohne Installation und auch für Windows und Linux:
+Alternative zur Mac- bzw. Windows-App, ohne Installation und auch für Linux:
 `Keycloak-Theme-Emulator-<version>-portable.zip` aus demselben Release
 (<https://github.com/h14r/keycloak-theme-emulator/releases/latest>).
 
@@ -198,7 +276,8 @@ der Werkzeugleiste.
 ## Auf eine neue Version aktualisieren
 
 Ein Update ersetzt nur das Programm. **Eigene Themes und `scenario.json`
-bleiben erhalten**: Der Arbeitsordner `~/Keycloak Theme Emulator` wird beim
+bleiben erhalten**: Der Arbeitsordner `~/Keycloak Theme Emulator` (Windows:
+`C:\Users\<Name>\Keycloak Theme Emulator`) wird beim
 Start nur ergänzt, nie überschrieben.
 
 - **Mac, per Terminal:** denselben Befehl wie bei der Installation erneut
@@ -206,6 +285,9 @@ Start nur ergänzt, nie überschrieben.
   `curl -fsSL https://raw.githubusercontent.com/h14r/keycloak-theme-emulator/main/install-mac.sh | bash`
 - **Mac, per `.dmg`:** Emulator beenden, neue `.dmg` öffnen und die App
   erneut nach *Programme* ziehen → *Ersetzen*.
+- **Windows:** Emulator beenden, dann den PowerShell-Befehl von oben erneut
+  ausführen oder die neue `.msi` öffnen – sie ersetzt die installierte
+  Version (kein Deinstallieren nötig).
 - **Portables ZIP:** neues ZIP entpacken und die Ordner `themes/` sowie die
   Datei `scenario.json` aus dem alten Ordner hineinkopieren.
 
@@ -298,6 +380,12 @@ Template-Cache sind aus, Änderungen am Theme sind beim nächsten Laden sichtbar
 
 ## Oberfläche
 
+- **Überblick** beim Start: kurze Einführung in die Funktionen der aktuellen
+  Version mit Bildern aus der Anwendung. „Beim Start nicht mehr zeigen“ gilt
+  bis zur nächsten Version; der Knopf **Überblick** oben rechts öffnet ihn
+  jederzeit wieder. Die Bilder erzeugt `packaging/screenshots.js` aus der
+  laufenden Anwendung (siehe Kopf der Datei) – für eine neue Version einfach
+  neu ausführen.
 - **Formularseiten / E-Mails** links auswählen; jede Seite hat mehrere
   **Varianten** (Standard, Fehlerzustände, Erfolgsmeldungen …).
 - **Theme**: alle im Theme-Ordner und in Keycloak vorhandenen Themes.
@@ -319,11 +407,13 @@ Template-Cache sind aus, Änderungen am Theme sind beim nächsten Laden sichtbar
   vergessen?“ führen zur passenden Seite. Abgeschickte Formulare zeigen die
   übermittelten Felder (gelb markierter Hinweis des Emulators – keine
   Keycloak-Ausgabe).
-- **Bewertung** (rechts): Befunde der Prüfungen, Barrierefreiheitsprüfung
-  (axe-core, läuft lokal), Theme-Kette mit den eigenen Dateien, verfügbare
-  Template-Variablen und abgefragte Textschlüssel.
+- **Bewertung** (rechts): Befunde der Prüfungen, Theme-Kette mit den eigenen
+  Dateien, verfügbare Template-Variablen und abgefragte Textschlüssel;
+  darunter die Bereiche aktiver Module (z. B. Barrierefreiheit).
 - **Gesamtes Theme prüfen**: alle Varianten und Mails nacheinander, optional
-  mit Barrierefreiheit; Ergebnis als Markdown-Bericht herunterladbar.
+  mit den Prüfungen aktiver Module; Ergebnis als Markdown-Bericht
+  herunterladbar.
+- **Module**: Zusatzmodule aktivieren, deaktivieren oder entfernen.
 - **Szenario**: Realm-Schalter (Registrierung, „Angemeldet bleiben“, E-Mail
   als Benutzername …) und das vollständige Szenario als JSON bearbeiten.
 
@@ -379,9 +469,92 @@ oder als **Heuristik** markiert (Erfahrungsregel).
 | `styles`, `scripts`, `stylesCommon`, `scriptsCommon` verweisen auf nicht vorhandene Dateien; im Browser zusätzlich alle eingebundenen CSS/JS/Bilder (HTTP-Status) | Keycloak-Verhalten |
 | Fehlender Textschlüssel (Keycloak zeigt dann den Schlüssel selbst an); Kennzeichnung, wenn er auch im Original-Theme fehlt | Keycloak-Verhalten |
 | Möglicherweise unübersetzter Text (identisch mit dem englischen Bündel) | Heuristik |
-| Barrierefreiheit (axe-core 4.11, WCAG-Regeln) | Prüfwerkzeug |
+| Barrierefreiheit nach WCAG 2.2 AA – im [Modul Barrierefreiheit](#modul-barrierefreiheit-wcag-22-aa) | Prüfwerkzeug (axe-core 4.11) |
 | Mail: Aktionslink fehlt im HTML- oder Text-Teil, leerer Betreff/Text-Teil, Bilder mit relativer Adresse | Keycloak-Verhalten / Mail-Clients |
 | Mail: > 102 KB (Gmail kürzt), externe Stylesheets, `<script>`, flex/grid/position (Outlook), data:-Bilder, fehlende `alt`-Texte, langer Betreff | Heuristik |
+
+---
+
+## Modul Barrierefreiheit (WCAG 2.2 AA)
+
+Prüft die angezeigte Seite bzw. Mail gegen **WCAG 2.2, Stufe AA** (also alle
+Erfolgskriterien der Stufen A und AA) und stellt das Ergebnis ähnlich wie die
+Browser-Erweiterung **WAVE** von WebAIM dar. Grundlage ist die
+Prüfbibliothek **axe-core 4.11.3** (läuft lokal im Browser, Regeln mit den
+Tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`, `wcag22aa` sowie
+`best-practice`; deutsche Meldungstexte von axe-core).
+
+**Symbole auf der Seite** – wie bei WAVE in sechs Kategorien, einzeln
+ein-/ausblendbar. Ein Klick auf ein Symbol öffnet die Referenz dazu:
+
+| Kategorie | Inhalt |
+|---|---|
+| ✕ Fehler | Verstöße gegen WCAG 2.2 A/AA, die axe-core sicher erkennt |
+| ◐ Kontrastfehler | Text unter 4,5:1 bzw. 3:1 (großer Text), Kriterium 1.4.3 |
+| ! Hinweise | von axe-core als „manuell prüfen“ gemeldet, Best-Practice-Regeln ohne WCAG-Zuordnung und einige eigene, als *Heuristik* gekennzeichnete Hinweise (z. B. fehlendes `autocomplete` bei Benutzername/E-Mail/Passwort → 1.3.5, Tabellen ohne Kopfzellen, sehr kleine Schrift, Links in neuem Fenster) |
+| ✓ Merkmale | vorhandene Alternativtexte, beschriftete Felder, Gruppen mit Legende, `lang`, `autocomplete`, Sprunglink |
+| ≡ Struktur | Überschriften, Landmarks, Listen, Tabellen |
+| A ARIA | Elemente mit `role` oder `aria-*` (Live-Regionen, `aria-hidden`, `aria-invalid` …) |
+
+**Ansichten** im Bereich „Barrierefreiheit“:
+
+- **Übersicht** – Anzahl je Kategorie und Stand der 55 WCAG-Kriterien
+  (Verstoß · Prüfen · automatisch ohne Befund · nicht anwendbar · nur manuell)
+- **Details** – alle Befunde gruppiert; Klick markiert das Element in der
+  Vorschau und zeigt die **Referenz**: Beschreibung, „So beheben“, HTML des
+  Elements, zugehörige WCAG-Kriterien mit Link auf „Understanding WCAG 2.2“
+- **Reihenfolge** – Tab-Reihenfolge mit Rolle und zugänglichem Namen,
+  optional als Nummern auf der Seite (2.4.3)
+- **Struktur** – Gliederung der Überschriften (übersprungene Ebenen und leere
+  Überschriften markiert) und Landmarks
+- **Kontrast** – alle geprüften Texte mit Farben und Verhältnis; Kontrastrechner
+  mit Farbwählern und Bewertung für normalen Text (4,5:1), großen Text (3:1)
+  und Bedienelemente/Grafiken (1.4.11, 3:1)
+- **Kriterien** – alle Erfolgskriterien A/AA mit Stufe, Status und den
+  zugeordneten axe-Regeln
+
+Dazu wie bei WAVE **Styles aus** (Seite ohne CSS – zeigt die Lesereihenfolge)
+und **Graustufen** (Information nur über Farbe? → 1.4.1), außerdem
+**Bericht** (Markdown für die aktuelle Seite). Mit **automatisch** wird jede
+neue Vorschau sofort geprüft. In „Gesamtes Theme prüfen“ zählt die Spalte
+**WCAG-Verstöße** die verletzten Kriterien je Seite/Mail.
+
+Bei E-Mails sind die seitenbezogenen Regeln (Seitentitel, Landmarks, H1,
+`lang` am `<html>`) ausgeschaltet; der Text-Teil einer Mail wird nicht
+geprüft.
+
+> **Wichtig:** Automatische Prüfungen erkennen nur einen Teil der
+> WCAG-Anforderungen – das gilt für WAVE genauso wie für axe-core. „Ohne
+> Befund“ bedeutet nicht „barrierefrei“. Die
+> Kriterienliste zeigt, was zusätzlich von Hand zu prüfen ist – z. B.
+> Tastaturbedienung (2.1.1), sichtbarer Fokus (2.4.7), Umbruch bei 320 px
+> (1.4.10), Textabstände (1.4.12), Fehlermeldungen und -vorschläge (3.3.1,
+> 3.3.3) und barrierefreie Anmeldung ohne kognitiven Test (3.3.8).
+
+Die Vorschau wird nur für die Darstellung verändert (Symbole liegen in einer
+eigenen Ebene); Deaktivieren des Moduls stellt sie vollständig wieder her.
+
+---
+
+## Module aktivieren, deaktivieren, entfernen
+
+Zusatzfunktionen wie die Barrierefreiheitsprüfung sind **Module**. Knopf
+**Module** oben rechts:
+
+- **aktiv** an/aus – blendet das Modul sofort ein oder aus, ohne Neuladen.
+- **Entfernen** – das Modul wird nicht mehr geladen und vom Emulator nicht
+  mehr ausgeliefert. **Wiederherstellen** holt es zurück.
+
+Der Zustand steht in `modules-state.json` neben `scenario.json` (bei der
+Mac-App im Arbeitsordner) und gilt auch nach einem Neustart.
+
+Für Entwickler – Modul **endgültig aus dem Quellcode löschen**: Ordner
+`src/main/resources/ui/modules/<id>/` und den Eintrag in
+`src/main/resources/ui/modules/modules.json` entfernen. Der Emulator läuft
+ohne das Modul unverändert weiter (geprüft). Ein neues Modul ist ein Ordner
+mit `module.js` (meldet sich mit `KCEMU.register({...})` an, Schnittstelle
+am Anfang des Abschnitts „Module“ in `ui/app.js` beschrieben) und optional
+`module.css`.
 
 ---
 

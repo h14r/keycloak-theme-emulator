@@ -39,6 +39,7 @@ public class Server {
     private final Emulator emu;
     private final File scenarioFile;
     private final HttpServer http;
+    private final Modules modules;
 
     /** zuletzt angezeigte Seite – für Sprachumschalter und Links in der Vorschau */
     private volatile String lastPage = "login";
@@ -48,6 +49,7 @@ public class Server {
     public Server(Emulator emu, File scenarioFile, String host, int port) throws IOException {
         this.emu = emu;
         this.scenarioFile = scenarioFile;
+        this.modules = new Modules(new File(scenarioFile.getAbsoluteFile().getParentFile(), "modules-state.json"));
         this.http = HttpServer.create(new InetSocketAddress(host, port), 0);
         this.http.setExecutor(Executors.newFixedThreadPool(8));
         this.http.createContext("/", this::handle);
@@ -62,10 +64,16 @@ public class Server {
         try {
             if (path.equals("/") || path.equals("/index.html")) {
                 classpath(ex, "ui/index.html");
+            } else if (path.startsWith("/ui/modules/") && !moduleServed(path)) {
+                text(ex, 404, "text/plain", "Modul entfernt");
             } else if (path.startsWith("/ui/")) {
                 classpath(ex, path.substring(1));
+            } else if (path.equals("/api/modules") || path.startsWith("/api/modules/")) {
+                modules(ex, path.substring("/api/modules".length()));
             } else if (path.equals("/vendor/axe.min.js")) {
                 classpath(ex, "META-INF/resources/webjars/axe-core/4.11.3/axe.min.js");
+            } else if (path.equals("/vendor/axe-de.json")) {
+                classpath(ex, "META-INF/resources/webjars/axe-core/4.11.3/locales/de.json");
             } else if (path.equals("/api/catalog")) {
                 json(ex, 200, catalog());
             } else if (path.equals("/api/stamp")) {
@@ -229,6 +237,34 @@ public class Server {
             return;
         }
         text(ex, 404, "text/plain", "Nicht gefunden");
+    }
+
+    // ---------------------------------------------------------------- Module
+
+    /**
+     * GET /api/modules          Module mit Zustand (enabled, removed)
+     * PUT /api/modules/{id}     {"enabled": true|false} bzw. {"removed": true|false}
+     */
+    private void modules(HttpExchange ex, String rest) throws IOException {
+        String method = ex.getRequestMethod();
+        if (rest.isEmpty() && "GET".equals(method)) {
+            json(ex, 200, Map.of("modules", modules.list()));
+            return;
+        }
+        if (rest.startsWith("/") && ("PUT".equals(method) || "POST".equals(method))) {
+            com.fasterxml.jackson.databind.JsonNode req = Scenario.JSON.readTree(ex.getRequestBody().readAllBytes());
+            boolean ok = modules.update(rest.substring(1), req);
+            json(ex, ok ? 200 : 404, ok ? Map.of("modules", modules.list()) : Map.of("error", "Unbekanntes Modul"));
+            return;
+        }
+        text(ex, 404, "text/plain", "Nicht gefunden");
+    }
+
+    /** /ui/modules/{id}/… nur ausliefern, solange das Modul nicht entfernt ist. */
+    private boolean moduleServed(String path) throws IOException {
+        String rest = path.substring("/ui/modules/".length());
+        int slash = rest.indexOf('/');
+        return slash < 0 || modules.served(rest.substring(0, slash));
     }
 
     // ---------------------------------------------------------------- Seiten
@@ -564,7 +600,10 @@ public class Server {
         }
         String ct = res.endsWith(".html") ? "text/html; charset=utf-8"
                 : res.endsWith(".js") ? "text/javascript; charset=utf-8"
-                : res.endsWith(".css") ? "text/css; charset=utf-8" : "application/octet-stream";
+                : res.endsWith(".css") ? "text/css; charset=utf-8"
+                : res.endsWith(".json") ? "application/json; charset=utf-8"
+                : res.endsWith(".jpg") ? "image/jpeg"
+                : res.endsWith(".png") ? "image/png" : "application/octet-stream";
         ex.getResponseHeaders().set("Content-Type", ct);
         ex.getResponseHeaders().set("Cache-Control", "no-store");
         ex.sendResponseHeaders(200, data.length);
