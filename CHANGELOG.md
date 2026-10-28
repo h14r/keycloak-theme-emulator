@@ -1,5 +1,16 @@
 # Changelog – Keycloak Theme Emulator
 
+## [1.3.2] – 2026-10-28
+
+- Behoben: Barrierefreiheit erkannte Fundstellen, die Markierungen auf der
+  gerenderten Seite fehlten aber – erst „Styles aus“ zeigte sie. Die
+  Markierungsebene ist jetzt gegen Regeln des Themes geschützt (eigenes
+  Element, Stile mit `!important`), misst ihre Position an sich selbst
+  (stimmt auch bei positioniertem `<html>`/`<body>` und bei Themes, in denen
+  `body` scrollt), zeichnet bei jeder Layoutänderung neu (Bilder, Schriften,
+  Skripte, Größe, inneres Scrollen) und prüft alle 1,5 Sekunden selbst, ob
+  alle Markierungen vorhanden sind.
+
 ## [1.3.1] – 2026-10-28
 
 Fehlerbehebungen, neue Oberfläche, eigene Symbole, Updates ohne Altlasten.
