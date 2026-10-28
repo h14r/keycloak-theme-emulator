@@ -101,6 +101,54 @@ jobs:
           hdiutil detach "$MOUNT"
           exit $STATUS
 
+      - name: Update-Test – ältere Version wird ersetzt, Themes und Einstellungen bleiben
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(mvn -q help:evaluate -Dexpression=project.version -DforceStdout)"
+          APP="Keycloak Theme Emulator.app"
+          WORK="$HOME/Keycloak Theme Emulator"
+          # vorherige veröffentlichte Version für diese Architektur
+          OLD_URL="$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/releases?per_page=20" \
+            | python3 -c "import json,sys; v='v$VERSION'; a='-${{ matrix.arch }}.dmg'
+          for r in json.load(sys.stdin):
+              if r['tag_name'] != v:
+                  u = [x['browser_download_url'] for x in r['assets'] if x['name'].endswith(a)]
+                  if u: print(u[0]); break")"
+          if [[ -z "$OLD_URL" ]]; then echo "Keine ältere Version veröffentlicht – Update-Test entfällt."; exit 0; fi
+          echo "Ältere Version: $OLD_URL"
+          curl -fsSL -o "$RUNNER_TEMP/old.dmg" "$OLD_URL"
+          OLDM="$(hdiutil attach -nobrowse -readonly "$RUNNER_TEMP/old.dmg" | tail -1 | cut -f3-)"
+          mkdir -p "$HOME/Applications"
+          cp -R "$OLDM/$APP" "$HOME/Applications/"      # alte Version an anderer Stelle installiert
+          cp -R "$OLDM/$APP" "/Applications/"            # und eine zweite am üblichen Ort
+          hdiutil detach -quiet "$OLDM"
+          # Vorlagen und Einstellungen des Nutzers
+          mkdir -p "$WORK/themes/update-test/login"
+          echo "parent=keycloak.v2" > "$WORK/themes/update-test/login/theme.properties"
+          echo '{"kcemu-ui":"{\"appearance\":\"dark\"}"}' > "$WORK/ui-settings.json"
+          cp "$WORK/scenario.json" "$RUNNER_TEMP/scenario-before.json"
+
+          ./install-mac.sh --dmg "$(ls target/installer/*.dmg)" --no-start
+
+          FAIL=0
+          COUNT=$(ls -d /Applications/Keycloak\ Theme\ Emulator*.app "$HOME"/Applications/Keycloak\ Theme\ Emulator*.app 2>/dev/null | wc -l | tr -d ' ')
+          NOW="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "/Applications/$APP/Contents/Info.plist")"
+          echo "Installationen: $COUNT, Version: $NOW"
+          [[ "$COUNT" == 1 && "$NOW" == "$VERSION" ]] || { echo "::error::Nicht genau eine Installation der neuen Version"; FAIL=1; }
+          [[ -f "$WORK/themes/update-test/login/theme.properties" ]] || { echo "::error::Eigenes Theme fehlt nach dem Update"; FAIL=1; }
+          grep -q '"appearance' "$WORK/ui-settings.json" || { echo "::error::Einstellungen fehlen nach dem Update"; FAIL=1; }
+          cmp -s "$WORK/scenario.json" "$RUNNER_TEMP/scenario-before.json" || { echo "::error::scenario.json wurde verändert"; FAIL=1; }
+
+          # Aufräumen beim Start: alte Kopie per Hand nach ~/Programme gelegt, neue App starten
+          OLDM="$(hdiutil attach -nobrowse -readonly "$RUNNER_TEMP/old.dmg" | tail -1 | cut -f3-)"
+          cp -R "$OLDM/$APP" "$HOME/Applications/"
+          hdiutil detach -quiet "$OLDM"
+          "/Applications/$APP/Contents/MacOS/Keycloak Theme Emulator" --check --locale de || FAIL=1
+          grep "Ältere Installation" "$WORK/emulator.log" || true
+          [[ ! -e "$HOME/Applications/$APP" ]] || { echo "::error::Alte Kopie wurde beim Start nicht entfernt"; FAIL=1; }
+          exit $FAIL
+
       - name: Dateiname mit Architektur
         id: name
         run: |
@@ -171,9 +219,31 @@ jobs:
           & $signtool.FullName verify /pa $msi
           exit $LASTEXITCODE
 
-      - name: Installieren und installierte App starten (Smoke-Test)
+      - name: Update von der Vorversion, Installieren und installierte App starten (Smoke-Test)
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          # Update-Test: zuerst die vorherige veröffentlichte Version installieren (falls vorhanden)
+          $version = (Select-Xml -Path pom.xml -XPath '/*[local-name()="project"]/*[local-name()="version"]').Node.InnerText
+          $work = Join-Path $HOME "Keycloak Theme Emulator"
+          $rels = Invoke-RestMethod -Headers @{ Authorization = "Bearer $env:GH_TOKEN" } "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases?per_page=20"
+          $old = $rels | Where-Object { $_.tag_name -ne "v$version" } | ForEach-Object { $_.assets | Where-Object { $_.name -like '*-windows-x64.msi' } } | Select-Object -First 1
+          if ($old) {
+            Write-Output "Ältere Version: $($old.name)"
+            $oldMsi = Join-Path $env:RUNNER_TEMP $old.name
+            Invoke-WebRequest -UseBasicParsing $old.browser_download_url -OutFile $oldMsi
+            $p = Start-Process msiexec.exe -ArgumentList "/i `"$oldMsi`" /qn" -Wait -PassThru
+            if ($p.ExitCode -ne 0) { Write-Output "Alte Version nicht installierbar ($($p.ExitCode))"; exit 1 }
+            $oldExe = Get-ChildItem $env:LOCALAPPDATA -Recurse -Depth 3 -Filter "Keycloak Theme Emulator.exe" | Select-Object -First 1
+            Start-Process $oldExe.FullName -ArgumentList "--check" -Wait | Out-Null   # legt den Arbeitsordner an
+            New-Item -ItemType Directory -Force (Join-Path $work "themes\update-test\login") | Out-Null
+            Set-Content (Join-Path $work "themes\update-test\login\theme.properties") "parent=keycloak.v2"
+            Set-Content (Join-Path $work "ui-settings.json") '{"kcemu-ui":"{\"appearance\":\"dark\"}"}'
+            Copy-Item (Join-Path $work "scenario.json") (Join-Path $env:RUNNER_TEMP "scenario-before.json")
+          } else {
+            Write-Output "Keine ältere Version veröffentlicht – Update-Test entfällt."
+          }
           # Installation über dasselbe Skript wie beim Nutzer (install-windows.ps1), nur mit der eben gebauten .msi
           $msi = (Get-ChildItem target/installer/*.msi | Select-Object -First 1).FullName
           try {
@@ -189,6 +259,17 @@ jobs:
           $r = Start-Process $exe.FullName -ArgumentList "--check", "--locale", "de" -Wait -PassThru
           Get-Content (Join-Path $HOME "Keycloak Theme Emulator\emulator.log")
           if (-not $menu) { Write-Output "Startmenü-Eintrag fehlt"; exit 1 }
+          # genau eine Installation, und zwar die neue; Vorlagen und Einstellungen erhalten
+          $keys = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+          $inst = @(Get-ItemProperty $keys -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'Keycloak Theme Emulator' })
+          Write-Output ("Installiert: " + (($inst | ForEach-Object { $_.DisplayVersion }) -join ', '))
+          if ($inst.Count -ne 1 -or -not $inst[0].DisplayVersion.StartsWith($version)) { Write-Output "::error::Nicht genau eine Installation der neuen Version"; exit 1 }
+          if ($old) {
+            if (-not (Test-Path (Join-Path $work "themes\update-test\login\theme.properties"))) { Write-Output "::error::Eigenes Theme fehlt nach dem Update"; exit 1 }
+            if (-not (Select-String -Quiet -Path (Join-Path $work "ui-settings.json") -Pattern 'appearance')) { Write-Output "::error::Einstellungen fehlen nach dem Update"; exit 1 }
+            if ((Get-FileHash (Join-Path $work "scenario.json")).Hash -ne (Get-FileHash (Join-Path $env:RUNNER_TEMP "scenario-before.json")).Hash) { Write-Output "::error::scenario.json wurde verändert"; exit 1 }
+            Write-Output "Update von $($old.name) erfolgreich: alte Version entfernt, Themes und Einstellungen erhalten."
+          }
           exit $r.ExitCode
 
       - name: Dateiname mit Plattform

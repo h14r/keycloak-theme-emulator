@@ -1,5 +1,35 @@
 # Changelog – Keycloak Theme Emulator
 
+## [1.3.1] – 2026-10-28
+
+Fehlerbehebungen, neue Oberfläche, eigene Symbole, Updates ohne Altlasten.
+
+- Behoben: Barrierefreiheit zeigte trotz Ergebnis keine Markierungen auf der
+  Seite. Wurde die Vorschau während einer Prüfung neu geladen (Live-Neuladen,
+  ↻, Seitenwechsel), konnte die Prüfung hängen bleiben („Prüfe …“) und alle
+  weiteren blockieren. Jetzt ist jede Prüfung unabhängig, veraltete Ergebnisse
+  werden verworfen, jeder Schritt hat ein Zeitlimit.
+- Barrierefreiheit: Fundstellen werden auf der Seite eingerahmt und
+  nummeriert, mit gleichnamiger Liste im Inspektor (Hover hebt hervor, Klick
+  zeigt die Referenz). Schalter „Auf der Seite markieren“ (ein/aus) und
+  „nur Fundstellen“ / „alles (wie WAVE)“ ersetzen den Knopf „Symbole“.
+- Hell/Dunkel getrennt einstellbar: für die Oberfläche (System/Hell/Dunkel)
+  und für die Vorschau – diese simuliert die Geräteeinstellung
+  (`prefers-color-scheme`), auch bei Klicks in der Vorschau und für Mails.
+- Neue Oberfläche angelehnt an aktuelle Betriebssysteme: Titelleiste mit
+  Werkzeugen, Seitenleiste als Quellliste, Leisten für Inhalt und Ansicht,
+  Inspektor mit Reitern und Zählern, segmentierte Schalter, Kippschalter,
+  Symbole; passt sich an Fensterbreiten bis unter 760 px an. Behoben:
+  unlesbare Auswahllisten im Dunkelmodus (Safari).
+- Neue App-Symbole: Favicon, Web-Manifest, Symbol in der Titelleiste, im
+  Steuerfenster, im Mac-Programm (`.icns`) und im Windows-Installer (`.ico`).
+- Updates: Es bleibt immer genau eine Version installiert. Mac: Installskript
+  und erster Start der neuen App entfernen ältere bzw. doppelte Kopien;
+  Windows: Installer ersetzt die alte Version, Installskript beseitigt Reste.
+  Themes und Einstellungen werden übernommen; Einstellungen der Oberfläche
+  zusätzlich in `ui-settings.json` gesichert (übersteht Portwechsel).
+  Der Build prüft das Update von der Vorversion auf Mac und Windows.
+
 ## [1.3.0] – 2026-10-28
 
 Barrierefreiheitsprüfung nach WCAG 2.2 AA als abschaltbares Modul.

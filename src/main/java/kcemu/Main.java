@@ -18,6 +18,7 @@ public class Main {
         System.setProperty("java.util.logging.manager", "org.jboss.logmanager.LogManager");
         System.setOut(new java.io.PrintStream(new java.io.FileOutputStream(java.io.FileDescriptor.out), true, java.nio.charset.StandardCharsets.UTF_8));
 
+        Installations.Report installations = new Installations.Report();
         boolean app = DesktopApp.isInstalledApp() || java.util.Arrays.asList(args).contains("--app");
         File themes = new File("themes");
         File scenario = new File("scenario.json");
@@ -25,6 +26,7 @@ public class Main {
             java.nio.file.Path dir = DesktopApp.workDir();
             DesktopApp.prepareWorkDir(dir);
             DesktopApp.redirectOutput(dir);
+            installations = Installations.cleanUpMac();
             themes = dir.resolve("themes").toFile();
             scenario = dir.resolve("scenario.json").toFile();
         }
@@ -81,7 +83,7 @@ public class Main {
         System.out.println("  Szenario: " + (scenario.isFile() ? scenario.getAbsolutePath() : "Voreinstellung (" + scenario.getName() + " fehlt)"));
         System.out.println("  Oberfläche: " + base);
         if (app) {
-            DesktopApp.showWindow(base, DesktopApp.workDir());
+            DesktopApp.showWindow(base, DesktopApp.workDir(), installations);
         }
         if (app || open) {
             DesktopApp.browse(base);

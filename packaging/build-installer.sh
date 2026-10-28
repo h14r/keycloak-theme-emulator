@@ -40,6 +40,7 @@ ARGS=(
   --dest target/installer
 )
 if [[ "$(uname)" == "Darwin" ]]; then
+  ARGS+=(--icon packaging/icons/icon.icns)
   ARGS+=(--mac-package-identifier de.prototypes.kcemu --mac-package-name "KC Theme Emu")
   if [[ -n "${MAC_SIGNING_NAME:-}" ]]; then
     # jpackage signiert App und .dmg mit Hardened Runtime und den für Java nötigen Entitlements
@@ -53,6 +54,7 @@ fi
 case "$(uname -s)" in
   MINGW* | MSYS* | CYGWIN*)
     ARGS+=(
+      --icon packaging/icons/app.ico
       --win-per-user-install
       --win-dir-chooser
       --win-menu
@@ -62,6 +64,10 @@ case "$(uname -s)" in
     )
     ;;
 esac
+
+if [[ "$(uname)" == "Linux" ]]; then
+  ARGS+=(--icon packaging/icons/png/icon-512.png)
+fi
 
 jpackage "${ARGS[@]}"
 ls -la target/installer

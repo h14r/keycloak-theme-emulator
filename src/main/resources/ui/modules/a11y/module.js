@@ -103,7 +103,10 @@
   };
 
   const STORE = 'kcemu-a11y';
-  const prefs = Object.assign({ auto: true, icons: true, tab: 'summary', cats: Object.fromEntries(CAT_KEYS.map((k) => [k, true])), order: false }, load());
+  const prefs = Object.assign({ auto: true, mark: true, scope: 'problems', tab: 'summary', cats: Object.fromEntries(CAT_KEYS.map((k) => [k, true])), order: false }, load());
+  delete prefs.icons; // Einstellung bis 1.3.0, ersetzt durch mark/scope
+  /** Kategorien, die als Fundstelle (Rahmen + Nummer) auf der Seite markiert werden */
+  const PROBLEM_CATS = ['error', 'contrast', 'alert'];
   function load() {
     try { return JSON.parse(localStorage.getItem(STORE) || '{}'); } catch (e) { return {}; }
   }
@@ -115,18 +118,25 @@
 
   let localeDe = null;
 
+  /** Versprechen mit Zeitlimit – eine ersetzte Vorschau beantwortet manche Aufrufe nie. */
+  function limit(promise, ms, what) {
+    let t;
+    return Promise.race([promise, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(what + ' – Zeitüberschreitung')), ms); })])
+      .finally(() => clearTimeout(t));
+  }
+
   async function ensureAxe(frame) {
     const win = frame.contentWindow;
     const doc = frame.contentDocument;
     if (!win.axe) {
-      await new Promise((res, rej) => {
+      await limit(new Promise((res, rej) => {
         const s = doc.createElement('script');
         s.src = '/vendor/axe.min.js';
         s.dataset.kcemu = 'a11y';
         s.onload = res;
         s.onerror = () => rej(new Error('axe-core nicht ladbar'));
         (doc.head || doc.documentElement).appendChild(s);
-      });
+      }), 15000, 'axe-core laden');
     }
     if (!localeDe) {
       try { localeDe = await (await fetch('/vendor/axe-de.json')).json(); } catch (e) { localeDe = {}; }
@@ -177,10 +187,19 @@
     }
     const axe = await ensureAxe(frame);
     const rules = Object.fromEntries((isMail ? MAIL_OFF : []).map((r) => [r, { enabled: false }]));
-    const res = await axe.run(
+    // axe-core erlaubt pro Seite nur einen Lauf gleichzeitig – kurz warten, falls einer läuft
+    const axeRun = async (ctx, opts) => {
+      for (let i = 0; ; i++) {
+        try { return await axe.run(ctx, opts); } catch (e) {
+          if (i >= 20 || !/already running/i.test(String(e && e.message))) throw e;
+          await new Promise((r) => setTimeout(r, 250));
+        }
+      }
+    };
+    const res = await limit(axeRun(
       { include: [doc], exclude: [['#kcemu-a11y-layer'], ['script[data-kcemu]']] },
       { runOnly: { type: 'tag', values: [...WCAG_TAGS, 'best-practice'] }, rules, elementRef: true },
-    );
+    ), 30000, 'Prüfung');
 
     const items = [];
     const ruleInfo = {};
@@ -239,6 +258,9 @@
       return { ...c, status, rules: rs.map((r) => r.id) };
     });
 
+    // Fundstellen durchnummerieren (Fehler, Kontrast, Hinweise) – dieselben Nummern auf der Seite und in der Liste
+    let no = 0;
+    for (const k of PROBLEM_CATS) for (const it of items) if (it.cat === k) it.no = ++no;
     return { items, criteria, contrast, order: dom.order, headings: dom.headings, landmarks: dom.landmarks, rules: ruleInfo, isMail, at: new Date(), axeVersion: axe.version };
   }
 
@@ -421,7 +443,7 @@
 
   // ---------------------------------------------------------------- Ansicht
 
-  const S = { frame: null, doc: null, result: null, selected: null, styleOff: false, gray: false, busy: false, again: false, error: '', seq: 0, ctx: null, cc: { fg: '#767676', bg: '#ffffff' } };
+  const S = { frame: null, doc: null, result: null, selected: null, styleOff: false, gray: false, busy: false, hover: null, error: '', seq: 0, ctx: null, cc: { fg: '#767676', bg: '#ffffff' } };
   let P = null; // Panel
   const q = (sel) => P.querySelector(sel);
 
@@ -429,11 +451,19 @@
     S.ctx = ctx;
     P = ctx.panel;
     P.innerHTML = `
-      <h2>Barrierefreiheit <span class="muted small">WCAG 2.2 · Stufe AA</span></h2>
+      <h2 class="a11y-title">WCAG 2.2 · Stufe AA <span class="muted small">axe-core</span></h2>
       <div class="a11y-actions">
         <button type="button" class="primary" data-act="run">Prüfen</button>
-        <label class="switch small" title="Bei jeder neuen Vorschau automatisch prüfen"><input type="checkbox" data-pref="auto"> automatisch</label>
-        <button type="button" data-act="icons" aria-pressed="false" title="Symbole auf der Seite ein-/ausblenden">Symbole</button>
+        <label class="switch small" title="Bei jeder neuen Vorschau automatisch prüfen"><input type="checkbox" class="toggle" data-pref="auto"> automatisch</label>
+      </div>
+      <div class="a11y-mark">
+        <label class="switch" title="Fundstellen mit Rahmen und Nummer direkt in der Vorschau zeigen"><input type="checkbox" class="toggle" data-pref="mark"> Auf der Seite markieren</label>
+        <select data-pref="scope" aria-label="Was auf der Seite markiert wird">
+          <option value="problems">nur Fundstellen</option>
+          <option value="all">alles (wie WAVE)</option>
+        </select>
+      </div>
+      <div class="a11y-actions">
         <button type="button" data-act="styles" aria-pressed="false" title="Stylesheets der Seite abschalten (Lesereihenfolge ohne Gestaltung)">Styles aus</button>
         <button type="button" data-act="gray" aria-pressed="false" title="Seite in Graustufen zeigen">Graustufen</button>
         <button type="button" data-act="report" title="Ergebnis dieser Seite als Markdown herunterladen">Bericht</button>
@@ -448,9 +478,17 @@
       <p class="small muted a11y-note">Automatische Prüfungen erkennen nur einen Teil der WCAG-Anforderungen. „Ohne Befund“ heißt nicht „barrierefrei“ –
         die Kriterienliste zeigt, was zusätzlich manuell zu prüfen ist.</p>`;
     q('[data-pref=auto]').checked = prefs.auto;
+    q('[data-pref=mark]').checked = prefs.mark;
+    q('[data-pref=scope]').value = prefs.scope;
+    P.addEventListener('mouseover', onHover);
+    P.addEventListener('mouseout', onHover);
     P.addEventListener('click', onClick);
     P.addEventListener('change', onChange);
     P.addEventListener('input', onInput);
+    P.addEventListener('keydown', (e) => {
+      const li = e.target.closest('.a11y-finds [data-item]');
+      if (li && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); li.click(); }
+    });
     paint();
   }
 
@@ -464,6 +502,7 @@
 
   function onRender() {
     S.seq++;
+    S.busy = false;
     S.result = null;
     S.selected = null;
     S.error = '';
@@ -481,12 +520,16 @@
     else paint();
   }
 
+  /**
+   * Prüft die aktuelle Vorschau. Jeder Lauf ist unabhängig: Ein neuer Lauf (z. B. nach Neuladen
+   * der Vorschau) macht ältere ungültig, statt auf sie zu warten – deren Ergebnis wird verworfen.
+   */
   async function run() {
     const frame = S.frame || K.api.preview();
     if (!frame) return;
-    if (S.busy) { S.again = true; return; } // nach der laufenden Prüfung erneut prüfen
     S.frame = frame;
     S.doc = frame.contentDocument;
+    const doc = S.doc;
     const seq = ++S.seq;
     S.busy = true;
     S.error = '';
@@ -496,16 +539,19 @@
     paint();
     try {
       const r = await analyze(frame, K.api.mode === 'mail');
-      if (seq !== S.seq || !P) return;
+      if (seq !== S.seq || !P) return; // inzwischen neuer Lauf – dieses Ergebnis verwerfen
+      if (frame.contentDocument !== doc) { S.busy = false; run(); return; } // Vorschau ersetzt
+      r.doc = doc;
       S.result = r;
       S.selected = null;
     } catch (e) {
-      if (seq === S.seq) S.error = String(e && e.message || e);
-    } finally {
-      S.busy = false;
+      if (seq !== S.seq || !P) return;
+      if (frame.contentDocument !== doc) { S.busy = false; run(); return; }
+      S.error = String(e && e.message || e);
     }
-    if (S.again && P) { S.again = false; run(); return; }
-    if (P) { paint(); drawPage(); }
+    S.busy = false;
+    paint();
+    drawPage();
   }
 
   function visibleItems() {
@@ -521,15 +567,22 @@
   function paint() {
     if (!P) return;
     for (const b of P.querySelectorAll('[data-tab]')) b.setAttribute('aria-selected', String(b.dataset.tab === prefs.tab));
-    q('[data-act=icons]').setAttribute('aria-pressed', String(prefs.icons));
+    q('[data-pref=scope]').disabled = !prefs.mark;
     q('[data-act=styles]').setAttribute('aria-pressed', String(S.styleOff));
     q('[data-act=gray]').setAttribute('aria-pressed', String(S.gray));
     const status = q('.a11y-status');
     const r = S.result;
+    if (!r || r.skipped) S.ctx.badge?.('');
     if (S.busy) status.textContent = 'Prüfe …';
     else if (S.error) status.textContent = 'Prüfung fehlgeschlagen: ' + S.error;
     else if (r && r.skipped) status.textContent = r.skipped;
-    else if (r) status.textContent = `${K.api.label} · ${K.api.theme} · geprüft ${r.at.toLocaleTimeString('de-DE')} mit axe-core ${r.axeVersion}`;
+    else if (r) {
+      const n = r.items.filter((it) => it.no).length;
+      const severe = r.items.some((it) => it.cat === 'error' || it.cat === 'contrast');
+      S.ctx.badge?.(n || '', severe ? 'error' : n ? 'warning' : '');
+      status.textContent = `${K.api.label} · ${K.api.theme} · geprüft ${r.at.toLocaleTimeString('de-DE')} mit axe-core ${r.axeVersion} · `
+        + (n ? `${n} Fundstelle${n === 1 ? '' : 'n'}${prefs.mark ? ' auf der Seite markiert' : ' (Markierung aus)'}` : 'keine Fundstellen');
+    }
     else status.textContent = prefs.auto ? 'Wartet auf die Vorschau …' : 'Noch nicht geprüft – „Prüfen“ startet die Prüfung dieser Vorschau.';
     const body = q('.a11y-body');
     body.innerHTML = r && !r.skipped ? VIEWS[prefs.tab]() : '';
@@ -544,12 +597,27 @@
       + `<span class="a11y-ico" data-cat="${k}" aria-hidden="true">${CATS[k].icon}</span><strong>${c[k]}</strong> ${CATS[k].label}</label>`).join('')}</div>`;
   }
 
+  function findingsList() {
+    const r = S.result;
+    const list = r.items.filter((it) => it.no && prefs.cats[it.cat]);
+    if (!r.items.some((it) => it.no)) return '<p class="a11y-none">Keine Fundstellen – axe-core meldet auf dieser Seite weder Verstöße noch Hinweise.</p>';
+    return `<h3>Fundstellen auf der Seite (${list.length})</h3><ol class="a11y-finds">${list.map((it) => {
+      const vis = it.el && it.el.isConnected && isVisible(it.el);
+      const what = it.el ? (text(it.el, 40) || `<${it.el.localName}>`) : '';
+      const ratio = it.contrast && it.contrast.ratio ? ` · ${it.contrast.ratio}:1 statt ${it.contrast.required}` : '';
+      return `<li class="click${it === S.selected ? ' on' : ''}${vis ? '' : ' hid'}" data-item="${r.items.indexOf(it)}" tabindex="0">`
+        + `<span class="a11y-no" data-cat="${it.cat}" aria-hidden="true">${it.no}</span>`
+        + `<span><strong>${esc(it.title)}</strong><br><span class="small muted">${CATS[it.cat].label}${it.sc.length ? ' · WCAG ' + it.sc.join(', ') : ''}${ratio}`
+        + ` · „${esc(what)}“${vis ? '' : ' · nicht sichtbar'}</span></span></li>`;
+    }).join('')}</ol>`;
+  }
+
   const VIEWS = {
     summary() {
       const r = S.result;
       const by = (s) => r.criteria.filter((c) => c.status === s).length;
       const fails = r.criteria.filter((c) => c.status === 'fail');
-      return catPills()
+      return catPills() + findingsList()
         + `<table class="a11y-table"><tr><th>WCAG 2.2 A/AA (${r.criteria.length} Kriterien)</th><th class="n">Anzahl</th></tr>`
         + Object.entries(STATUS).map(([k, s]) => `<tr><td><span class="a11y-st ${s.cls}">${s.label}</span></td><td class="n">${by(k)}</td></tr>`).join('')
         + '</table>'
@@ -571,7 +639,7 @@
     },
     order() {
       const o = S.result.order;
-      return `<label class="switch small"><input type="checkbox" data-pref="order" ${prefs.order ? 'checked' : ''}> Nummern auf der Seite zeigen</label>`
+      return `<label class="switch small"><input type="checkbox" class="toggle" data-pref="order" ${prefs.order ? 'checked' : ''}> Nummern auf der Seite zeigen</label>`
         + `<p class="small muted">${o.length} Tab-Stopps in der Reihenfolge der Tabulatortaste (2.4.3). Positive tabindex-Werte kommen zuerst.</p>`
         + `<table class="a11y-table"><tr><th class="n">#</th><th>Rolle</th><th>Zugänglicher Name</th></tr>${o.map((x, i) => `<tr data-order="${i}" class="click">`
         + `<td class="n">${x.n}</td><td>${esc(x.role)}${x.tabindex && Number(x.tabindex) > 0 ? ` <span class="a11y-st warning">tabindex=${esc(x.tabindex)}</span>` : ''}</td>`
@@ -660,7 +728,6 @@
     if (act) {
       const a = act.dataset.act;
       if (a === 'run') run();
-      else if (a === 'icons') { prefs.icons = !prefs.icons; save(); paint(); drawPage(); }
       else if (a === 'styles') { setStyles(!S.styleOff); paint(); drawPage(); }
       else if (a === 'gray') { setGray(!S.gray); paint(); }
       else if (a === 'report') report();
@@ -690,8 +757,19 @@
   function onChange(e) {
     const t = e.target;
     if (t.dataset.pref === 'auto') { prefs.auto = t.checked; save(); if (t.checked && !S.result) run(); }
+    else if (t.dataset.pref === 'mark') { prefs.mark = t.checked; save(); paint(); drawPage(); }
+    else if (t.dataset.pref === 'scope') { prefs.scope = t.value; save(); drawPage(); }
     else if (t.dataset.pref === 'order') { prefs.order = t.checked; save(); drawPage(); }
     else if (t.dataset.catbox) { prefs.cats[t.dataset.catbox] = t.checked; save(); paint(); drawPage(); }
+  }
+
+  /** Fahren über eine Fundstelle in der Liste hebt sie in der Vorschau hervor. */
+  function onHover(e) {
+    const li = e.target.closest('.a11y-finds [data-item]');
+    const it = e.type === 'mouseover' && li && S.result ? S.result.items[Number(li.dataset.item)] : null;
+    if (it === S.hover) return;
+    S.hover = it;
+    drawPage();
   }
 
   function onInput(e) {
@@ -738,15 +816,25 @@
     :host { all: initial; }
     .i { position: absolute; width: 18px; height: 18px; border-radius: 4px; font: bold 12px/18px system-ui, sans-serif; text-align: center;
          color: #fff; cursor: pointer; box-shadow: 0 0 0 1px #fff, 0 1px 3px rgba(0,0,0,.5); pointer-events: auto; user-select: none; }
-    .i[data-cat=error] { background: #c4001d; }
-    .i[data-cat=contrast] { background: #8f0c6d; }
-    .i[data-cat=alert] { background: #f0b400; color: #1c1c1c; }
-    .i[data-cat=feature] { background: #1d7a35; }
-    .i[data-cat=structure] { background: #1f5fbf; }
-    .i[data-cat=aria] { background: #6b35b0; }
+    [data-cat=error] { --c: #d70015; }
+    [data-cat=contrast] { --c: #a3007d; }
+    [data-cat=alert] { --c: #e8a200; }
+    [data-cat=feature] { --c: #1d7a35; }
+    [data-cat=structure] { --c: #1f5fbf; }
+    [data-cat=aria] { --c: #6b35b0; }
+    .i { background: var(--c); }
     .i.n { background: #111; border-radius: 9px; min-width: 18px; width: auto; padding: 0 4px; box-sizing: border-box; }
     .i.on { outline: 3px solid #111; outline-offset: 1px; }
-    .box { position: absolute; outline: 3px solid #c4001d; outline-offset: 2px; box-shadow: 0 0 0 9999px rgba(0,0,0,.08); pointer-events: none; }`;
+    .m { position: absolute; box-sizing: border-box; border: 2px solid var(--c); border-radius: 4px; pointer-events: none;
+         background: color-mix(in srgb, var(--c) 10%, transparent); box-shadow: 0 0 0 1px rgba(255,255,255,.85); }
+    .m[data-cat=alert] { border-style: dashed; }
+    .c { position: absolute; box-sizing: border-box; height: 18px; min-width: 22px; padding: 0 5px; border-radius: 9px; background: var(--c); color: #fff;
+         font: 700 11px/18px system-ui, -apple-system, sans-serif; text-align: center; white-space: nowrap; cursor: pointer; pointer-events: auto;
+         box-shadow: 0 0 0 1.5px #fff, 0 1px 4px rgba(0,0,0,.45); user-select: none; }
+    .c[data-cat=alert] { color: #1c1c1c; }
+    .c.on, .m.on { outline: 3px solid #0a84ff; outline-offset: 2px; }
+    .m.hover { background: color-mix(in srgb, var(--c) 28%, transparent); }
+    .box { position: absolute; outline: 3px solid #0a84ff; outline-offset: 3px; box-shadow: 0 0 0 9999px rgba(0,0,0,.12); pointer-events: none; border-radius: 4px; }`;
 
   function layer() {
     const doc = S.doc;
@@ -771,25 +859,49 @@
 
   function drawPage() {
     const r = S.result;
-    if (!S.doc || !S.doc.defaultView || !r || r.skipped || !P) { removeLayer(); return; }
+    if (!r || r.skipped || !P) { removeLayer(); return; }
+    // Wurde die Vorschau inzwischen ersetzt, gehört das Ergebnis zur alten Seite → neu prüfen
+    if (S.frame && r.doc && S.frame.contentDocument !== r.doc) {
+      S.doc = S.frame.contentDocument;
+      if (!S.busy) run();
+      return;
+    }
+    if (!S.doc || !S.doc.defaultView) return;
     const root = layer();
     if (!root) return;
     const win = S.doc.defaultView;
     const sx = win.scrollX; const sy = win.scrollY;
+    const pageW = S.doc.documentElement.scrollWidth;
     let html = `<style>${LAYER_CSS}</style>`;
     const slots = new Map();
-    const place = (el) => {
-      const rect = el.getBoundingClientRect();
-      const k = slots.get(el) || 0;
-      slots.set(el, k + 1);
-      return { x: Math.max(0, rect.left + sx + k * 20), y: Math.max(0, rect.top + sy) };
-    };
-    if (prefs.icons) {
+    const shown = (it) => prefs.cats[it.cat] && it.el && it.el.isConnected && isVisible(it.el);
+    if (prefs.mark) {
+      // Fundstellen: Rahmen um das Element und Nummer wie in der Liste
       r.items.forEach((it, idx) => {
-        if (!prefs.cats[it.cat] || !it.el || !it.el.isConnected || !isVisible(it.el)) return;
-        const p = place(it.el);
-        html += `<div class="i${it === S.selected ? ' on' : ''}" data-cat="${it.cat}" data-i="${idx}" style="left:${p.x}px;top:${p.y}px" title="${esc(CATS[it.cat].label + ': ' + it.title)}">${CATS[it.cat].icon}</div>`;
+        if (!it.no || !shown(it)) return;
+        const b = it.el.getBoundingClientRect();
+        const on = it === S.selected ? ' on' : '';
+        const hover = it === S.hover ? ' hover' : '';
+        html += `<div class="m${on}${hover}" data-cat="${it.cat}" style="left:${b.left + sx - 3}px;top:${b.top + sy - 3}px;width:${b.width + 6}px;height:${b.height + 6}px"></div>`;
+        const k = slots.get(it.el) || 0;
+        slots.set(it.el, k + 1);
+        const label = String(it.no);
+        const w = 12 + label.length * 7;
+        // Nummer als Plakette auf der linken oberen Ecke des Rahmens (mehrere nebeneinander)
+        const x = Math.max(0, Math.min(b.left + sx - 10 + k * (w + 2), pageW - w));
+        const y = Math.max(0, b.top + sy - 12);
+        html += `<div class="c${on}" data-cat="${it.cat}" data-i="${idx}" style="left:${x}px;top:${y}px" title="${esc(`${it.no}: ${CATS[it.cat].label} – ${it.title}`)}">${label}</div>`;
       });
+      // „alles“: zusätzlich Merkmale, Struktur und ARIA als Symbole wie bei WAVE
+      if (prefs.scope === 'all') {
+        r.items.forEach((it, idx) => {
+          if (it.no || !shown(it)) return;
+          const b = it.el.getBoundingClientRect();
+          const k = slots.get(it.el) || 0;
+          slots.set(it.el, k + 1);
+          html += `<div class="i${it === S.selected ? ' on' : ''}" data-cat="${it.cat}" data-i="${idx}" style="left:${Math.max(0, b.left + sx + k * 20)}px;top:${Math.max(0, b.top + sy)}px" title="${esc(CATS[it.cat].label + ': ' + it.title)}">${CATS[it.cat].icon}</div>`;
+        });
+      }
     }
     if (prefs.order || prefs.tab === 'order') {
       for (const o of r.order) {
@@ -799,18 +911,18 @@
       }
     }
     const sel = S.selected;
-    if (sel && sel.el && sel.el.isConnected && isVisible(sel.el)) {
+    if (sel && !sel.no && sel.el && sel.el.isConnected && isVisible(sel.el)) {
       const b = sel.el.getBoundingClientRect();
       html += `<div class="box" style="left:${b.left + sx}px;top:${b.top + sy}px;width:${b.width}px;height:${b.height}px"></div>`;
     }
     root.innerHTML = html;
     root.onclick = (e) => {
-      const i = e.target.closest('.i[data-i]');
+      const i = e.target.closest('[data-i]');
       if (!i) return;
       e.preventDefault();
       e.stopPropagation();
       const it = r.items[Number(i.dataset.i)];
-      if (prefs.tab === 'order' || prefs.tab === 'criteria' || prefs.tab === 'contrast') prefs.tab = 'details';
+      if (prefs.tab !== 'summary' && prefs.tab !== 'details') prefs.tab = it.no ? 'summary' : 'details';
       select(it);
       P.querySelector('.a11y-ref')?.scrollIntoView({ block: 'nearest' });
     };
