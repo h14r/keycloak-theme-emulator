@@ -28,7 +28,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
 
 /**
- * Start als installierte Anwendung (macOS-App aus der .dmg): Arbeitsordner im Benutzerverzeichnis,
+ * Start als installierte Anwendung (macOS-App aus der .dmg, Windows-App aus der .msi): Arbeitsordner im Benutzerverzeichnis,
  * freier Port, kleines Steuerfenster, Browser öffnet sich automatisch.
  */
 final class DesktopApp {

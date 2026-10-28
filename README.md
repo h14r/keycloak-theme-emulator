@@ -14,6 +14,7 @@ festhalten.
 ## Inhalt
 
 - [Installation auf dem Mac (.dmg)](#installation-auf-dem-mac-dmg)
+- [Installation unter Windows (.msi)](#installation-unter-windows-msi)
 - [Ohne Installation im Browser (portables ZIP)](#ohne-installation-im-browser-portables-zip)
 - [Neue Themes importieren und auswählen](#neue-themes-importieren-und-auswählen)
 - [Auf eine neue Version aktualisieren](#auf-eine-neue-version-aktualisieren)
@@ -44,7 +45,7 @@ nicht nötig.
 - `Keycloak-Theme-Emulator-<version>-arm64.dmg` – Apple Silicon (M1–M4)
 - `Keycloak-Theme-Emulator-<version>-x64.dmg` – Intel-Mac
 
-Die Dateien entstehen über GitHub Actions (Workflow „Pakete (.dmg und
+Die Dateien entstehen über GitHub Actions (Workflow „Pakete (.dmg, .msi und
 portable ZIP)“). Sobald auf `main` eine neue Version (aus `pom.xml`)
 ankommt, legt der Workflow automatisch das Release `v<version>` an.
 
@@ -130,9 +131,84 @@ packaging/build-installer.sh dmg     # Ergebnis: target/installer/*.dmg
 
 ---
 
+## Installation unter Windows (.msi)
+
+Der Installer bringt die Java-Laufzeit mit – Java oder Maven sind nicht
+nötig. Installiert wird **für den angemeldeten Benutzer, ohne
+Administratorrechte**, mit Eintrag im Startmenü und Verknüpfung auf dem
+Desktop. Windows 10 oder 11, 64 Bit (x64).
+
+**Herunterladen** (ohne GitHub-Anmeldung):
+<https://github.com/h14r/keycloak-theme-emulator/releases/latest> →
+`Keycloak-Theme-Emulator-<version>-windows-x64.msi`
+
+**Installieren ohne Sicherheitswarnung (empfohlen):** In *PowerShell*
+(Startmenü → „PowerShell“) eingeben:
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/h14r/keycloak-theme-emulator/main/install-windows.ps1 | iex"
+```
+
+Das Skript ([install-windows.ps1](./install-windows.ps1)) lädt die `.msi`
+aus dem neuesten Release, installiert sie und startet die App. Per
+PowerShell geladene Dateien tragen keine Internet-Markierung – Windows zeigt
+deshalb die SmartScreen-Meldung nicht an. Für Updates denselben Befehl erneut
+ausführen.
+
+**Installieren per Download:** `.msi` im Browser laden und doppelklicken.
+Solange der Installer nicht signiert ist (siehe
+[Windows: signieren](#windows-signieren)), meldet Windows beim ersten
+Öffnen „Der Computer wurde durch Windows geschützt“. Dann auf *Weitere
+Informationen* → *Trotzdem ausführen* klicken. Alternativ vorher:
+Rechtsklick auf die `.msi` → *Eigenschaften* → unten *Zulassen* anhaken →
+*OK*. Manche Browser fragen schon beim Download nach, ob die Datei behalten
+werden soll („wird nicht häufig heruntergeladen“) → *Beibehalten*.
+
+Der Assistent fragt nach dem Installationsordner (Voreinstellung im
+Benutzerprofil) und legt den Startmenü-Eintrag *Keycloak Theme Emulator* an.
+
+**Benutzung:** wie beim Mac – nach dem Start öffnen sich ein kleines Fenster
+und der Browser mit der Oberfläche. Der Arbeitsordner liegt unter
+`C:\Users\<Name>\Keycloak Theme Emulator` (Themes, `scenario.json`,
+`emulator.log`). „Theme-Ordner öffnen“ zeigt ihn im Explorer; Fenster
+schließen oder „Beenden“ stoppt den Emulator.
+
+**Deinstallieren:** *Einstellungen → Apps → Installierte Apps* →
+*Keycloak Theme Emulator* → *Deinstallieren*. Der Arbeitsordner mit den
+eigenen Themes bleibt dabei erhalten.
+
+### Windows: signieren
+
+Damit SmartScreen auch beim Browser-Download nicht warnt, muss die `.msi`
+mit einem **Code-Signing-Zertifikat** signiert sein. Der Workflow signiert
+automatisch (`signtool`, SHA-256, Zeitstempel), sobald diese
+Repository-Secrets gesetzt sind:
+
+| Secret | Inhalt |
+|---|---|
+| `WINDOWS_CERTIFICATE_PFX` | Code-Signing-Zertifikat samt privatem Schlüssel als `.pfx`, Base64-kodiert (PowerShell: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("zertifikat.pfx"))`) |
+| `WINDOWS_CERTIFICATE_PASSWORD` | Passwort der `.pfx`-Datei |
+
+Hinweis: SmartScreen bewertet auch die „Reputation“. Bei einem neuen
+Zertifikat kann die Warnung anfangs trotz Signatur noch erscheinen, bis
+genug Downloads zusammengekommen sind. Zertifikate, deren Schlüssel nur auf
+Hardware bzw. in einem Cloud-Dienst liegen darf (heute bei vielen Anbietern
+üblich), lassen sich nicht als `.pfx` hinterlegen – dann muss der
+Signierschritt an den jeweiligen Dienst angepasst werden. Der Signierschritt
+ist mangels Zertifikat noch nicht praktisch erprobt.
+
+**Selbst bauen** (unter Windows mit JDK 21, Maven, Git Bash und
+[WiX Toolset 3](https://github.com/wixtoolset/wix3/releases)):
+
+```bash
+packaging/build-installer.sh msi     # Ergebnis: target/installer/*.msi
+```
+
+---
+
 ## Ohne Installation im Browser (portables ZIP)
 
-Alternative zur Mac-App, ohne Installation und auch für Windows und Linux:
+Alternative zur Mac- bzw. Windows-App, ohne Installation und auch für Linux:
 `Keycloak-Theme-Emulator-<version>-portable.zip` aus demselben Release
 (<https://github.com/h14r/keycloak-theme-emulator/releases/latest>).
 
@@ -200,7 +276,8 @@ der Werkzeugleiste.
 ## Auf eine neue Version aktualisieren
 
 Ein Update ersetzt nur das Programm. **Eigene Themes und `scenario.json`
-bleiben erhalten**: Der Arbeitsordner `~/Keycloak Theme Emulator` wird beim
+bleiben erhalten**: Der Arbeitsordner `~/Keycloak Theme Emulator` (Windows:
+`C:\Users\<Name>\Keycloak Theme Emulator`) wird beim
 Start nur ergänzt, nie überschrieben.
 
 - **Mac, per Terminal:** denselben Befehl wie bei der Installation erneut
@@ -208,6 +285,9 @@ Start nur ergänzt, nie überschrieben.
   `curl -fsSL https://raw.githubusercontent.com/h14r/keycloak-theme-emulator/main/install-mac.sh | bash`
 - **Mac, per `.dmg`:** Emulator beenden, neue `.dmg` öffnen und die App
   erneut nach *Programme* ziehen → *Ersetzen*.
+- **Windows:** Emulator beenden, dann den PowerShell-Befehl von oben erneut
+  ausführen oder die neue `.msi` öffnen – sie ersetzt die installierte
+  Version (kein Deinstallieren nötig).
 - **Portables ZIP:** neues ZIP entpacken und die Ordner `themes/` sowie die
   Datei `scenario.json` aus dem alten Ordner hineinkopieren.
 

@@ -1,5 +1,6 @@
 # Baut den Keycloak Theme Emulator
 # - als installierbare macOS-App (.dmg) für Apple Silicon (arm64) und Intel (x64)
+# - als Windows-Installer (.msi, x64, Installation ohne Administratorrechte)
 # - als portable Fassung (ZIP, für macOS/Windows/Linux, benötigt Java 21)
 #
 # - bei jedem Push und Pull Request: Pakete als Artefakte des Workflow-Laufs
@@ -8,7 +9,7 @@
 #   Neue Version veröffentlichen = Version in pom.xml erhöhen und auf main pushen.
 #   Öffentliches Repository → Download ohne GitHub-Anmeldung.
 # - ein manuell gepushter Tag "v*" veröffentlicht ebenfalls
-name: Pakete (.dmg und portable ZIP)
+name: Pakete (.dmg, .msi und portable ZIP)
 
 on:
   push:
@@ -114,6 +115,96 @@ jobs:
           path: target/installer/${{ steps.name.outputs.file }}
           if-no-files-found: error
 
+  msi:
+    runs-on: windows-2022
+    env:
+      # Signieren nur, wenn ein Code-Signing-Zertifikat als Secret hinterlegt ist
+      # (siehe README, Abschnitt „Windows: signieren“). Ohne entsteht eine unsignierte .msi.
+      HAS_SIGNING: ${{ secrets.WINDOWS_CERTIFICATE_PFX != '' }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Prüfung aller Seiten und Mails unter Windows (Beispiel-Theme)
+        run: |
+          mvn -q -B package
+          java -jar target/keycloak-theme-emulator.jar --check --locale de
+
+      - name: WiX Toolset 3 bereitstellen (von jpackage für .msi benötigt)
+        shell: pwsh
+        run: |
+          $wix = Get-ChildItem "${env:ProgramFiles(x86)}" -Filter "WiX Toolset v3*" -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $wix) {
+            choco install wixtoolset --version 3.14.1 -y --no-progress
+            $wix = Get-ChildItem "${env:ProgramFiles(x86)}" -Filter "WiX Toolset v3*" -Directory | Select-Object -First 1
+          }
+          Write-Output "WiX: $($wix.FullName)"
+          "$($wix.FullName)\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+
+      - name: .msi bauen
+        run: packaging/build-installer.sh msi
+
+      - name: .msi signieren
+        if: env.HAS_SIGNING == 'true'
+        shell: pwsh
+        env:
+          PFX_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_PFX }}
+          PFX_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP "cert.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_BASE64))
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1
+          $msi = (Get-ChildItem target/installer/*.msi | Select-Object -First 1).FullName
+          & $signtool.FullName sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /f $pfx /p $env:PFX_PASSWORD $msi
+          $code = $LASTEXITCODE
+          Remove-Item $pfx
+          if ($code -ne 0) { exit $code }
+          & $signtool.FullName verify /pa $msi
+          exit $LASTEXITCODE
+
+      - name: Installieren und installierte App starten (Smoke-Test)
+        shell: pwsh
+        run: |
+          # Installation über dasselbe Skript wie beim Nutzer (install-windows.ps1), nur mit der eben gebauten .msi
+          $msi = (Get-ChildItem target/installer/*.msi | Select-Object -First 1).FullName
+          try {
+            ./install-windows.ps1 -Msi $msi -NoStart
+          } catch {
+            Write-Output $_
+            Get-Content (Join-Path $env:TEMP "keycloak-theme-emulator-install.log") -Tail 60 -ErrorAction SilentlyContinue
+            exit 1
+          }
+          $exe = Get-ChildItem $env:LOCALAPPDATA, $env:ProgramFiles -Recurse -Depth 3 -Filter "Keycloak Theme Emulator.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          $menu = Get-ChildItem "$env:APPDATA\Microsoft\Windows\Start Menu\Programs" -Recurse -Filter "Keycloak Theme Emulator*.lnk" -ErrorAction SilentlyContinue
+          Write-Output "Startmenü: $($menu.FullName -join ', ')"
+          $r = Start-Process $exe.FullName -ArgumentList "--check", "--locale", "de" -Wait -PassThru
+          Get-Content (Join-Path $HOME "Keycloak Theme Emulator\emulator.log")
+          if (-not $menu) { Write-Output "Startmenü-Eintrag fehlt"; exit 1 }
+          exit $r.ExitCode
+
+      - name: Dateiname mit Plattform
+        id: name
+        run: |
+          VERSION="$(mvn -q help:evaluate -Dexpression=project.version -DforceStdout)"
+          FILE="Keycloak-Theme-Emulator-${VERSION}-windows-x64.msi"
+          mv target/installer/*.msi "target/installer/$FILE"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.name.outputs.file }}
+          path: target/installer/${{ steps.name.outputs.file }}
+          if-no-files-found: error
+
   portable:
     runs-on: ubuntu-latest
     steps:
@@ -150,7 +241,7 @@ jobs:
 
   release:
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
-    needs: [dmg, portable]
+    needs: [dmg, msi, portable]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -171,8 +262,8 @@ jobs:
             echo "Release $TAG existiert bereits – nichts zu tun (für ein neues Release Version in pom.xml erhöhen)."
             exit 0
           fi
-          gh release create "$TAG" dist/*.dmg dist/*.zip \
+          gh release create "$TAG" dist/*.dmg dist/*.msi dist/*.zip \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Keycloak Theme Emulator ${VERSION}" \
-            --notes "macOS-App (.dmg) für Apple Silicon (arm64) und Intel (x64) sowie portable Fassung (ZIP) für macOS, Windows und Linux mit Java 21. Installation, Update und erster Start: siehe README. Änderungen: siehe CHANGELOG.md."
+            --notes "macOS-App (.dmg) für Apple Silicon (arm64) und Intel (x64), Windows-Installer (.msi, x64) sowie portable Fassung (ZIP) für macOS, Windows und Linux mit Java 21. Installation, Update und erster Start: siehe README. Änderungen: siehe CHANGELOG.md."

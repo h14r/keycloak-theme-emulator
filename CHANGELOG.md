@@ -18,6 +18,10 @@ Barrierefreiheitsprüfung nach WCAG 2.2 AA als abschaltbares Modul.
   „WCAG-Verstöße“)
 - Die bisherige Schaltfläche „Barrierefreiheit prüfen (axe-core)“ ist im
   Modul aufgegangen
+- Windows-Installer (`.msi`, x64): Installation ohne Administratorrechte,
+  Startmenü und Desktop-Verknüpfung, eigene Java-Laufzeit; neue Versionen
+  ersetzen die installierte; `install-windows.ps1` installiert per
+  PowerShell ohne SmartScreen-Warnung; optionales Signieren im Workflow
 - Überblick beim Start: neun kurze Seiten zu den Funktionen mit Bildern aus
   der Anwendung (Beispiel-Theme); „nicht mehr zeigen“ bis zur nächsten
   Version, jederzeit über „Überblick“; Bilder werden mit
