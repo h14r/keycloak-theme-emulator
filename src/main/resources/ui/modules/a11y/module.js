@@ -443,7 +443,7 @@
 
   // ---------------------------------------------------------------- Ansicht
 
-  const S = { frame: null, doc: null, result: null, selected: null, styleOff: false, gray: false, busy: false, hover: null, error: '', seq: 0, ctx: null, cc: { fg: '#767676', bg: '#ffffff' } };
+  const S = { frame: null, doc: null, result: null, selected: null, styleOff: false, gray: false, busy: false, hover: null, watch: null, drawn: 0, error: '', seq: 0, ctx: null, cc: { fg: '#767676', bg: '#ffffff' } };
   let P = null; // Panel
   const q = (sel) => P.querySelector(sel);
 
@@ -813,7 +813,6 @@
   // ---------------------------------------------------------------- Darstellung auf der Seite
 
   const LAYER_CSS = `
-    :host { all: initial; }
     .i { position: absolute; width: 18px; height: 18px; border-radius: 4px; font: bold 12px/18px system-ui, sans-serif; text-align: center;
          color: #fff; cursor: pointer; box-shadow: 0 0 0 1px #fff, 0 1px 3px rgba(0,0,0,.5); pointer-events: auto; user-select: none; }
     [data-cat=error] { --c: #d70015; }
@@ -836,20 +835,78 @@
     .m.hover { background: color-mix(in srgb, var(--c) 28%, transparent); }
     .box { position: absolute; outline: 3px solid #0a84ff; outline-offset: 3px; box-shadow: 0 0 0 9999px rgba(0,0,0,.12); pointer-events: none; border-radius: 4px; }`;
 
+  /**
+   * Ebene für die Markierungen: eigenes Element (kein div) am Ende von <html>, Stil geschützt mit
+   * !important – Regeln eines Themes können sie damit weder verstecken noch verschieben oder
+   * abschneiden. Inhalt im Shadow DOM, unberührt vom CSS der Seite.
+   */
+  const HOST_CSS = ['position:absolute', 'left:0', 'top:0', 'width:0', 'height:0', 'margin:0', 'padding:0', 'border:0',
+    'display:block', 'visibility:visible', 'opacity:1', 'z-index:2147483647', 'transform:none', 'filter:none',
+    'clip-path:none', 'mask:none', 'overflow:visible', 'pointer-events:none', 'contain:none', 'float:none']
+    .map((d) => d + ' !important').join(';');
+
   function layer() {
     const doc = S.doc;
     if (!doc || !doc.documentElement) return null;
     let host = doc.getElementById('kcemu-a11y-layer');
     if (!host) {
-      host = doc.createElement('div');
+      host = doc.createElement('kcemu-a11y-layer');
       host.id = 'kcemu-a11y-layer';
-      host.style.cssText = 'position:absolute;left:0;top:0;width:0;height:0;z-index:2147483647;pointer-events:none;';
-      doc.documentElement.appendChild(host);
+      host.setAttribute('aria-hidden', 'true');
       host.attachShadow({ mode: 'open' });
-      doc.defaultView.addEventListener('resize', scheduleDraw);
+      watch(doc);
     }
+    if (host.getAttribute('style') !== HOST_CSS) host.setAttribute('style', HOST_CSS);
+    // immer als letztes Kind von <html> – nach allem, was das Theme einfügt
+    if (host.parentNode !== doc.documentElement || host.nextSibling) doc.documentElement.appendChild(host);
     return host.shadowRoot;
   }
+
+  /** Neu zeichnen, sobald sich das Layout der Vorschau ändert (Bilder, Schriften, Skripte, Größe). */
+  function watch(doc) {
+    unwatch();
+    const win = doc.defaultView;
+    const o = { doc, win, list: [] };
+    win.addEventListener('resize', scheduleDraw);
+    doc.addEventListener('load', scheduleDraw, true); // Bilder, Stylesheets
+    doc.addEventListener('scroll', onInnerScroll, true); // Themes, in denen nicht die Seite, sondern ein Element scrollt
+    o.list.push(() => {
+      win.removeEventListener('resize', scheduleDraw);
+      doc.removeEventListener('load', scheduleDraw, true);
+      doc.removeEventListener('scroll', onInnerScroll, true);
+    });
+    if (win.ResizeObserver) {
+      const ro = new win.ResizeObserver(scheduleDraw);
+      ro.observe(doc.documentElement);
+      if (doc.body) ro.observe(doc.body);
+      o.list.push(() => ro.disconnect());
+    }
+    if (win.MutationObserver && doc.body) {
+      const mo = new win.MutationObserver(scheduleDraw);
+      mo.observe(doc.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'hidden'] });
+      o.list.push(() => mo.disconnect());
+    }
+    try { doc.fonts?.ready.then(() => scheduleDraw()); } catch (e) { /* ohne Schriften-Ereignis */ }
+    S.watch = o;
+  }
+
+  function onInnerScroll(e) {
+    // Scrollen des Dokuments selbst verschiebt die Ebene mit; nur inneres Scrollen braucht Neuzeichnen
+    if (e.target && e.target.nodeType === 1 && e.target !== e.target.ownerDocument.documentElement) scheduleDraw();
+  }
+
+  function unwatch() {
+    if (S.watch) for (const off of S.watch.list) { try { off(); } catch (e) { /* Seite schon ersetzt */ } }
+    S.watch = null;
+  }
+
+  /** Selbstprüfung: fehlt die Ebene oder ein Teil der Markierungen, wird neu gezeichnet. */
+  setInterval(() => {
+    if (!P || !S.result || S.result.skipped || S.busy || !S.doc || !S.doc.defaultView) return;
+    const host = S.doc.getElementById('kcemu-a11y-layer');
+    const n = host && host.shadowRoot ? host.shadowRoot.querySelectorAll('.c, .i, .box').length : -1;
+    if (!host || !host.isConnected || n !== S.drawn || host.getAttribute('style') !== HOST_CSS) drawPage();
+  }, 1500);
 
   let drawTimer = 0;
   function scheduleDraw() {
@@ -869,8 +926,9 @@
     if (!S.doc || !S.doc.defaultView) return;
     const root = layer();
     if (!root) return;
-    const win = S.doc.defaultView;
-    const sx = win.scrollX; const sy = win.scrollY;
+    // Koordinaten relativ zur Ebene selbst – stimmt auch, wenn das Theme <html>/<body> positioniert
+    const origin = root.host.getBoundingClientRect();
+    const sx = -origin.left; const sy = -origin.top;
     const pageW = S.doc.documentElement.scrollWidth;
     let html = `<style>${LAYER_CSS}</style>`;
     const slots = new Map();
@@ -916,6 +974,7 @@
       html += `<div class="box" style="left:${b.left + sx}px;top:${b.top + sy}px;width:${b.width}px;height:${b.height}px"></div>`;
     }
     root.innerHTML = html;
+    S.drawn = root.querySelectorAll('.c, .i, .box').length;
     root.onclick = (e) => {
       const i = e.target.closest('[data-i]');
       if (!i) return;
@@ -929,11 +988,10 @@
   }
 
   function removeLayer() {
+    unwatch();
     const host = S.doc && S.doc.getElementById('kcemu-a11y-layer');
-    if (host) {
-      if (S.doc.defaultView) S.doc.defaultView.removeEventListener('resize', scheduleDraw);
-      host.remove();
-    }
+    if (host) host.remove();
+    S.drawn = 0;
   }
 
   function setStyles(off) {
