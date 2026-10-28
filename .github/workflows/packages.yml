@@ -2,10 +2,12 @@
 # - als installierbare macOS-App (.dmg) für Apple Silicon (arm64) und Intel (x64)
 # - als portable Fassung (ZIP, für macOS/Windows/Linux, benötigt Java 21)
 #
-# - bei jedem Push und Pull Request: .dmg als Artefakt des Workflow-Laufs
-# - bei einem Tag "v*" (z. B. v1.0.0): zusätzlich als GitHub-Release
-#   (öffentliches Repository → Download ohne GitHub-Anmeldung)
-# - manuell über "Run workflow"
+# - bei jedem Push und Pull Request: Pakete als Artefakte des Workflow-Laufs
+# - auf main bzw. per "Run workflow": Gibt es zur Version aus pom.xml noch kein
+#   Release, wird es angelegt (Tag v<version> entsteht dabei auf GitHub).
+#   Neue Version veröffentlichen = Version in pom.xml erhöhen und auf main pushen.
+#   Öffentliches Repository → Download ohne GitHub-Anmeldung.
+# - ein manuell gepushter Tag "v*" veröffentlicht ebenfalls
 name: Pakete (.dmg und portable ZIP)
 
 on:
@@ -147,7 +149,7 @@ jobs:
           compression-level: 0
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     needs: [dmg, portable]
     runs-on: ubuntu-latest
     permissions:
@@ -155,13 +157,22 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          path: dmg
+          path: dist
           merge-multiple: true
-      - name: GitHub-Release anlegen
+      - name: GitHub-Release anlegen (falls für diese Version noch keines existiert)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" dmg/*.dmg dmg/*.zip \
-            --repo "${GITHUB_REPOSITORY}" \
-            --title "Keycloak Theme Emulator ${GITHUB_REF_NAME#v}" \
-            --notes "macOS-App (.dmg) für Apple Silicon (arm64) und Intel (x64) sowie portable Fassung (ZIP) für macOS, Windows und Linux mit Java 21. Installation und erster Start: siehe README."
+          ls -la dist
+          # Version aus dem Dateinamen der portablen Fassung: Keycloak-Theme-Emulator-<version>-portable.zip
+          VERSION="$(ls dist/*-portable.zip | sed -E 's/.*Keycloak-Theme-Emulator-(.+)-portable\.zip/\1/')"
+          TAG="v${VERSION}"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Release $TAG existiert bereits – nichts zu tun (für ein neues Release Version in pom.xml erhöhen)."
+            exit 0
+          fi
+          gh release create "$TAG" dist/*.dmg dist/*.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Keycloak Theme Emulator ${VERSION}" \
+            --notes "macOS-App (.dmg) für Apple Silicon (arm64) und Intel (x64) sowie portable Fassung (ZIP) für macOS, Windows und Linux mit Java 21. Installation, Update und erster Start: siehe README. Änderungen: siehe CHANGELOG.md."

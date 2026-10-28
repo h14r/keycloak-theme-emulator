@@ -43,7 +43,8 @@ nicht nötig.
 - `Keycloak-Theme-Emulator-<version>-x64.dmg` – Intel-Mac
 
 Die Dateien entstehen über GitHub Actions (Workflow „Pakete (.dmg und
-portable ZIP)“); ein Tag `v<version>` legt automatisch ein Release an.
+portable ZIP)“). Sobald auf `main` eine neue Version (aus `pom.xml`)
+ankommt, legt der Workflow automatisch das Release `v<version>` an.
 
 Welcher Prozessor im Mac steckt, steht unter  → *Über diesen Mac*
 („Chip Apple …“ = arm64, „Prozessor Intel …“ = x64).
@@ -113,7 +114,7 @@ gesetzt sind (*Settings → Secrets and variables → Actions*):
 | `APPLE_TEAM_ID` | Team-ID (10 Zeichen, im Developer-Portal unter *Membership*) |
 | `APPLE_APP_PASSWORD` | App-spezifisches Passwort der Apple-ID (appleid.apple.com → *Anmeldung und Sicherheit*) |
 
-Danach einen neuen Tag `v<version>` setzen. Der Workflow signiert App und
+Danach die Version in `pom.xml` erhöhen und auf `main` pushen. Der Workflow signiert App und
 `.dmg` (`jpackage --mac-sign`, Hardened Runtime), reicht die `.dmg` bei Apple
 ein (`notarytool`), heftet das Ergebnis an (`stapler`) und prüft mit
 `spctl`, dass Gatekeeper die App akzeptiert. Ohne Secrets entsteht wie bisher

@@ -21,7 +21,7 @@ Installierbare macOS-App.
 
 - `.dmg` für Apple Silicon (arm64) und Intel (x64) mit eigener Java-Laufzeit,
   gebaut über GitHub Actions (`.github/workflows/packages.yml`);
-  Tag `v<version>` erzeugt ein GitHub-Release
+  neue Version auf `main` erzeugt automatisch das GitHub-Release `v<version>`
 - Start als App: Arbeitsordner `~/Keycloak Theme Emulator` mit Beispiel-Theme
   und Szenario (wird nie überschrieben), Steuerfenster (Browser öffnen,
   Theme-Ordner öffnen, Beenden), Browser öffnet sich automatisch, freier Port
