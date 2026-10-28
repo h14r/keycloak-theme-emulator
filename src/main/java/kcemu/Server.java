@@ -45,6 +45,8 @@ public class Server {
     private volatile String lastPage = "login";
     private volatile String lastVariant = "standard";
     private volatile String lastTheme;
+    /** Hell/Dunkel der Vorschau ("", "light", "dark") – gilt auch für Klicks innerhalb der Vorschau */
+    private volatile String lastScheme = "";
 
     public Server(Emulator emu, File scenarioFile, String host, int port) throws IOException {
         this.emu = emu;
@@ -64,10 +66,14 @@ public class Server {
         try {
             if (path.equals("/") || path.equals("/index.html")) {
                 classpath(ex, "ui/index.html");
+            } else if (path.equals("/favicon.ico")) {
+                classpath(ex, "ui/icons/favicon.ico");
             } else if (path.startsWith("/ui/modules/") && !moduleServed(path)) {
                 text(ex, 404, "text/plain", "Modul entfernt");
             } else if (path.startsWith("/ui/")) {
                 classpath(ex, path.substring(1));
+            } else if (path.equals("/api/ui-settings")) {
+                uiSettings(ex);
             } else if (path.equals("/api/modules") || path.startsWith("/api/modules/")) {
                 modules(ex, path.substring("/api/modules".length()));
             } else if (path.equals("/vendor/axe.min.js")) {
@@ -239,6 +245,47 @@ public class Server {
         text(ex, 404, "text/plain", "Nicht gefunden");
     }
 
+    // ---------------------------------------------------------------- Einstellungen der Oberfläche
+
+    /**
+     * GET/PUT /api/ui-settings – Sicherung der Einstellungen der Oberfläche (sonst nur im Browser
+     * gespeichert, und dort an den Port gebunden). Liegt als ui-settings.json neben scenario.json
+     * im Arbeitsordner und übersteht damit Updates, Portwechsel und andere Browser.
+     */
+    private void uiSettings(HttpExchange ex) throws IOException {
+        File f = new File(scenarioFile.getAbsoluteFile().getParentFile(), "ui-settings.json");
+        if ("PUT".equals(ex.getRequestMethod())) {
+            byte[] body = ex.getRequestBody().readNBytes(256 * 1024);
+            com.fasterxml.jackson.databind.JsonNode n;
+            try {
+                n = Scenario.JSON.readTree(body);
+            } catch (IOException e) {
+                json(ex, 400, Map.of("error", "kein JSON"));
+                return;
+            }
+            com.fasterxml.jackson.databind.node.ObjectNode clean = Scenario.JSON.createObjectNode();
+            if (n != null && n.isObject()) {
+                n.fields().forEachRemaining(e -> {
+                    if (e.getKey().startsWith("kcemu") && e.getValue().isTextual()) {
+                        clean.put(e.getKey(), e.getValue().asText());
+                    }
+                });
+            }
+            Scenario.JSON.writerWithDefaultPrettyPrinter().writeValue(f, clean);
+            json(ex, 200, Map.of("ok", true));
+            return;
+        }
+        if (!f.isFile()) {
+            json(ex, 200, Map.of());
+            return;
+        }
+        try {
+            text(ex, 200, "application/json; charset=utf-8", Files.readString(f.toPath()));
+        } catch (IOException e) {
+            json(ex, 200, Map.of());
+        }
+    }
+
     // ---------------------------------------------------------------- Module
 
     /**
@@ -303,6 +350,7 @@ public class Server {
         lastPage = r.page.id;
         lastVariant = r.variant.id;
         lastTheme = blank(q.get("theme"));
+        lastScheme = scheme(q);
         sendPage(ex, r);
     }
 
@@ -322,7 +370,55 @@ public class Server {
                     "<p>Ursache (aus dem Server-Log):</p><pre>" + esc(detail) + "</pre>"));
             return;
         }
-        text(ex, r.response.getStatus(), "text/html; charset=utf-8", entity.toString());
+        text(ex, r.response.getStatus(), "text/html; charset=utf-8", withScheme(entity.toString(), lastScheme));
+    }
+
+    private static String scheme(Map<String, String> q) {
+        String s = q.get("scheme");
+        return "light".equals(s) || "dark".equals(s) ? s : "";
+    }
+
+    private static final java.util.regex.Pattern HEAD = java.util.regex.Pattern.compile("<head\\b[^>]*>", java.util.regex.Pattern.CASE_INSENSITIVE);
+    private static final java.util.regex.Pattern HTML = java.util.regex.Pattern.compile("<html\\b[^>]*>", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Vorschau „hell“/„dunkel“: fügt ganz vorne in &lt;head&gt; ein Skript ein, das die Systemeinstellung
+     * (prefers-color-scheme) für diese Seite vorgibt – siehe ui/preview-scheme.js. Ohne Vorgabe bleibt
+     * die Ausgabe von Keycloak unverändert.
+     */
+    static String withScheme(String html, String scheme) {
+        if (scheme == null || scheme.isEmpty() || html == null) {
+            return html;
+        }
+        String js;
+        try {
+            js = new String(resource("ui/preview-scheme.js"), StandardCharsets.UTF_8).replace("__SCHEME__", scheme);
+        } catch (IOException e) {
+            return html;
+        }
+        String tag = "<script data-kcemu=\"scheme\">" + js + "</script>";
+        java.util.regex.Matcher m = HEAD.matcher(html);
+        if (!m.find()) {
+            m = HTML.matcher(html);
+            if (!m.find()) {
+                return tag + html;
+            }
+        }
+        return html.substring(0, m.end()) + tag + html.substring(m.end());
+    }
+
+    /** Datei aus src/main/resources (Entwicklung) bzw. dem Klassenpfad. */
+    private static byte[] resource(String res) throws IOException {
+        File dev = new File("src/main/resources/" + res);
+        if (dev.isFile()) {
+            return Files.readAllBytes(dev.toPath());
+        }
+        try (InputStream in = Server.class.getClassLoader().getResourceAsStream(res)) {
+            if (in == null) {
+                throw new IOException("Nicht gefunden: " + res);
+            }
+            return in.readAllBytes();
+        }
     }
 
     Map<String, Object> pageReport(String id, Map<String, String> q) {
@@ -447,7 +543,7 @@ public class Server {
         if ("text".equals(q.get("part"))) {
             text(ex, 200, "text/plain; charset=utf-8", r.mail.textBody == null ? "" : r.mail.textBody);
         } else {
-            text(ex, 200, "text/html; charset=utf-8", r.mail.htmlBody == null ? "" : r.mail.htmlBody);
+            text(ex, 200, "text/html; charset=utf-8", r.mail.htmlBody == null ? "" : withScheme(r.mail.htmlBody, scheme(q)));
         }
     }
 
@@ -603,7 +699,10 @@ public class Server {
                 : res.endsWith(".css") ? "text/css; charset=utf-8"
                 : res.endsWith(".json") ? "application/json; charset=utf-8"
                 : res.endsWith(".jpg") ? "image/jpeg"
-                : res.endsWith(".png") ? "image/png" : "application/octet-stream";
+                : res.endsWith(".png") ? "image/png"
+                : res.endsWith(".svg") ? "image/svg+xml"
+                : res.endsWith(".ico") ? "image/x-icon"
+                : res.endsWith(".webmanifest") ? "application/manifest+json; charset=utf-8" : "application/octet-stream";
         ex.getResponseHeaders().set("Content-Type", ct);
         ex.getResponseHeaders().set("Cache-Control", "no-store");
         ex.sendResponseHeaders(200, data.length);

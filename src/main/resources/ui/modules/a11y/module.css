@@ -1,9 +1,6 @@
 /* Modul Barrierefreiheit – nutzt die Farbvariablen der Oberfläche */
-.layout:has(.module[data-module="a11y"]) { grid-template-columns: 260px 1fr 420px; }
-@media (max-width: 1100px) { .layout:has(.module[data-module="a11y"]) { grid-template-columns: 220px 1fr; } }
-@media (max-width: 700px) { .layout:has(.module[data-module="a11y"]) { grid-template-columns: 1fr; } }
 
-.module[data-module="a11y"] { border-top: 1px solid var(--line); padding-top: 6px; }
+.a11y-title { display: flex; align-items: baseline; gap: 8px; }
 .module[data-module="a11y"] h3 { font-size: 13px; margin: 12px 0 4px; }
 .module[data-module="a11y"] pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; background: var(--surface-2); border-radius: 4px; padding: 6px; margin: 4px 0; max-height: 14em; overflow: auto; }
 .a11y-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
@@ -61,3 +58,38 @@
 .a11y-big { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .a11y-sw { display: inline-block; width: 14px; height: 14px; border: 1px solid var(--line); border-radius: 3px; margin-right: 2px; vertical-align: middle; }
 .a11y-note { margin-top: 10px; }
+
+/* Markierung auf der Seite und Fundstellen (1.3.1) */
+.a11y-mark { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); }
+.a11y-mark .switch { font-weight: 600; }
+.a11y-mark select { margin-left: auto; }
+.a11y-finds { list-style: none; margin: 4px 0 10px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.a11y-finds li { display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-size: 13px; cursor: pointer; }
+.a11y-finds li:hover, .a11y-finds li:focus-visible { border-color: var(--accent); }
+.a11y-finds li.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.a11y-finds li.hid { opacity: .6; }
+.a11y-no { flex: none; min-width: 22px; height: 20px; padding: 0 5px; border-radius: 10px; text-align: center; font: 700 11px/20px system-ui, sans-serif; color: #fff; }
+.a11y-no[data-cat="error"] { background: #d70015; }
+.a11y-no[data-cat="contrast"] { background: #a3007d; }
+.a11y-no[data-cat="alert"] { background: #e8a200; color: #1c1c1c; }
+.a11y-none { padding: 8px 10px; border-radius: 8px; background: var(--ok-bg); color: var(--ok); font-size: 13px; }
+
+/* an die Oberfläche ab 1.3.1 angepasst */
+.a11y-actions { margin: 6px 0; }
+.a11y-actions button { height: 26px; padding: 0 10px; font-size: 12.5px; }
+.a11y-actions button[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); }
+.a11y-tabs { display: flex; flex-wrap: wrap; gap: 2px; padding: 2px; border: 0; border-radius: 9px; background: var(--seg-track); overflow: visible; }
+.a11y-tabs button { flex: 1 1 auto; height: 24px; padding: 0 6px; border: 0; border-radius: 7px; background: transparent; box-shadow: none; font-size: 12px; }
+.a11y-tabs button + button { border-left: 0; }
+.a11y-tabs button[aria-selected="true"] { background: var(--seg-thumb); color: var(--text); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, .15); }
+.a11y-node { height: 20px; min-width: 24px; padding: 0 6px; font-size: 11px; }
+.a11y-ref { border: 0; border-left: 3px solid var(--accent); border-radius: 10px; background: var(--surface-2); padding: 10px 12px; }
+.a11y-ref-head button { height: 22px; width: 22px; padding: 0; }
+.a11y-mark select { height: 26px; }
+.a11y-cat input { accent-color: var(--accent); }
+.a11y-tabs { flex-wrap: nowrap; }
+.a11y-tabs button { padding: 0 3px; font-size: 11.5px; min-width: 0; }
+@container (max-width: 390px) {
+  .a11y-tabs { flex-wrap: wrap; }
+  .a11y-tabs button { flex: 1 1 30%; padding: 0 6px; }
+}

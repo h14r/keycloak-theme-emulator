@@ -11,6 +11,10 @@
 # Fuer Updates denselben Befehl erneut ausfuehren: Die neue Version ersetzt die alte, der
 # Arbeitsordner mit den eigenen Themes bleibt erhalten.
 #
+# Aeltere Versionen: Der Installer ersetzt sie selbst (gleicher Upgrade-Code). Das Skript
+# beendet vorher eine laufende Instanz und prueft danach, dass nur noch die neue Version
+# installiert ist; uebrig gebliebene Eintraege werden deinstalliert.
+#
 # Optionen (beim Aufruf als Datei):  -Msi <pfad>  vorhandene .msi statt Download,  -NoStart
 param(
     [string]$Msi = '',
@@ -36,6 +40,27 @@ if (-not $Msi) {
     Invoke-WebRequest -UseBasicParsing $asset.browser_download_url -OutFile $Msi
 }
 $Msi = (Resolve-Path $Msi).Path
+$NewVersion = if ([IO.Path]::GetFileName($Msi) -match '(\d+\.\d+\.\d+)') { $Matches[1] } else { '' }
+
+# installierte Versionen (pro Benutzer und fuer alle Benutzer) aus der Liste "Apps"
+function Get-Installed {
+    $keys = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    Get-ItemProperty $keys -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName -eq $Name } |
+        Select-Object DisplayName, DisplayVersion, PSChildName, UninstallString, InstallLocation
+}
+
+$before = @(Get-Installed)
+foreach ($i in $before) { Write-Host "Vorhanden: Version $($i.DisplayVersion)" }
+
+$running = Get-Process -Name $Name -ErrorAction SilentlyContinue
+if ($running) {
+    Write-Host 'Beende laufenden Emulator ...'
+    $running | Stop-Process -Force
+    Start-Sleep -Seconds 2
+}
 
 Write-Host 'Installiere fuer den aktuellen Benutzer ...'
 $log = Join-Path $env:TEMP 'keycloak-theme-emulator-install.log'
@@ -43,6 +68,21 @@ $p = Start-Process msiexec.exe -ArgumentList "/i `"$Msi`" /passive /norestart /l
 if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) {
     throw "Installation fehlgeschlagen (msiexec $($p.ExitCode)), Protokoll: $log"
 }
+
+# Reste aelterer Versionen entfernen, damit nur die neue installiert bleibt
+foreach ($i in @(Get-Installed)) {
+    if ($NewVersion -and $i.DisplayVersion -and -not $i.DisplayVersion.StartsWith($NewVersion)) {
+        if ($i.PSChildName -match '^\{[0-9A-Fa-f-]+\}$') {
+            Write-Host "Deinstalliere uebrig gebliebene Version $($i.DisplayVersion) ..."
+            Start-Process msiexec.exe -ArgumentList "/x $($i.PSChildName) /passive /norestart" -Wait | Out-Null
+        } else {
+            Write-Host "Hinweis: Version $($i.DisplayVersion) bitte unter Einstellungen > Apps deinstallieren."
+        }
+    }
+}
+$after = @(Get-Installed)
+Write-Host ("Installiert: " + (($after | ForEach-Object { $_.DisplayVersion }) -join ', '))
+Write-Host "Eigene Themes und Einstellungen: $(Join-Path $HOME $Name) (unveraendert uebernommen)"
 
 $exe = Get-ChildItem $env:LOCALAPPDATA, $env:ProgramFiles -Recurse -Depth 3 -Filter "$Name.exe" -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1

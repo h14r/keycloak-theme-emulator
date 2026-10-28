@@ -16,6 +16,8 @@ const state = {
   zoom: 1,
   fit: true,
   shownZoom: 1,
+  scheme: '',
+  insp: 'review',
   part: 'html',
   stamp: 0,
   report: null,
@@ -26,7 +28,55 @@ const LEVEL_LABEL = { error: 'Fehler', warning: 'Warnungen', info: 'Hinweise' };
 
 // ------------------------------------------------------------------ Start
 
+// ------------------------------------------------------------------ Einstellungen sichern
+
+/*
+ * Einstellungen der Oberfläche (alle localStorage-Einträge „kcemu…“) liegen zusätzlich im
+ * Arbeitsordner (ui-settings.json). Fehlen sie im Browser – neuer Port, anderer Browser, nach
+ * einem Update –, werden sie von dort übernommen. Der Browser hat Vorrang, wenn beides existiert.
+ */
+let savedSettings = '';
+
+function settingsSnapshot() {
+  const o = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith('kcemu')) o[k] = localStorage.getItem(k);
+  }
+  return JSON.stringify(o);
+}
+
+async function restoreSettings() {
+  try {
+    const saved = await (await fetch('/api/ui-settings')).json();
+    let restored = false;
+    for (const [k, v] of Object.entries(saved)) {
+      if (k.startsWith('kcemu') && typeof v === 'string' && localStorage.getItem(k) === null) {
+        localStorage.setItem(k, v);
+        restored = true;
+      }
+    }
+    // Darstellung wurde im <head> schon gesetzt – ggf. mit der übernommenen Einstellung erneut
+    if (restored) {
+      const t = JSON.parse(localStorage.getItem('kcemu-ui') || '{}').appearance;
+      if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+    }
+    savedSettings = settingsSnapshot();
+  } catch (e) { /* ohne Sicherung weiter */ }
+  setInterval(saveSettings, 3000);
+  window.addEventListener('pagehide', saveSettings);
+}
+
+function saveSettings() {
+  let s;
+  try { s = settingsSnapshot(); } catch (e) { return; }
+  if (s === savedSettings) return;
+  savedSettings = s;
+  fetch('/api/ui-settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: s, keepalive: true }).catch(() => {});
+}
+
 async function init() {
+  await restoreSettings();
   const cat = await (await fetch('/api/catalog')).json();
   state.catalog = cat;
   $('kcVersion').textContent = 'Version ' + cat.appVersion + ' · Keycloak ' + cat.keycloakVersion;
@@ -36,6 +86,8 @@ async function init() {
   restore();
   fillLocales();
   bind();
+  bindAppearance();
+  bindInspector();
   bindThemes();
   showList();
   select(state.mode, state.id, state.variant);
@@ -48,7 +100,7 @@ async function init() {
 
 function persist() {
   try {
-    localStorage.setItem('kcemu', JSON.stringify({ mode: state.mode, id: state.id, variant: state.variant, locale: state.locale, width: state.width, zoom: state.zoom, fit: state.fit }));
+    localStorage.setItem('kcemu', JSON.stringify({ mode: state.mode, id: state.id, variant: state.variant, locale: state.locale, width: state.width, zoom: state.zoom, fit: state.fit, scheme: state.scheme, insp: state.insp }));
   } catch (e) { /* ohne Speicher weiter */ }
 }
 
@@ -60,6 +112,7 @@ function restore() {
   if (!isKnown(state.mode, state.id)) { state.mode = 'page'; state.id = 'login'; state.variant = 'standard'; }
   if (!(state.zoom > 0)) state.zoom = 1;
   if (typeof state.fit !== 'boolean') state.fit = true;
+  if (!['', 'light', 'dark'].includes(state.scheme)) state.scheme = '';
 }
 
 function isKnown(mode, id) {
@@ -71,7 +124,8 @@ function fillLocales() {
   const sc = state.catalog.scenario;
   const sel = $('locale');
   const realm = sc.realm;
-  const opts = [`<option value="">Automatisch (${esc(sc.acceptLanguage || 'kein Accept-Language')})</option>`];
+  const first = (sc.acceptLanguage || '').split(',')[0].split(';')[0].trim();
+  const opts = [`<option value="" title="Accept-Language: ${esc(sc.acceptLanguage || '–')}">Automatisch – ${esc(first || 'ohne Accept-Language')}</option>`];
   if (realm.internationalizationEnabled) {
     for (const l of realm.supportedLocales) opts.push(`<option value="${esc(l)}">${esc(l)}</option>`);
   }
@@ -140,6 +194,7 @@ function url(kind, theme) {
   if (state.locale) p.set('locale', state.locale);
   if (theme) p.set('theme', theme);
   if (kind === 'render' && state.mode === 'mail') p.set('part', state.part);
+  if (kind === 'render' && state.scheme) p.set('scheme', state.scheme);
   const base = kind === 'render' ? '/render/' : '/api/';
   return base + (state.mode === 'page' ? 'page/' : 'mail/') + encodeURIComponent(state.id) + '?' + p;
 }
@@ -201,8 +256,20 @@ function zoomFit() {
   applyWidth();
 }
 
+/**
+ * Hell/Dunkel der Vorschau. „System“ lässt die Seite unverändert. Hell/Dunkel lässt der Server
+ * die Seite so beantworten, als wäre das Gerät entsprechend eingestellt (siehe ui/preview-scheme.js);
+ * dazu passend das color-scheme des iframe (Browser, die es an die Seite weitergeben).
+ */
+function applyScheme() {
+  const sys = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  for (const f of [$('f1'), $('f2')]) f.style.colorScheme = state.scheme || sys;
+  for (const b of $('previewScheme').querySelectorAll('button')) b.setAttribute('aria-checked', String(b.dataset.scheme === state.scheme));
+}
+
 async function render() {
   const t1 = state.theme[state.mode];
+  applyScheme();
   const t2 = state.theme2[state.mode];
   $('f1').src = url('render', t1);
   $('cap1').textContent = t1;
@@ -216,7 +283,12 @@ async function render() {
   applyWidth();
   moduleCall('onRender');
   state.resourceFindings = [];
-  const rep = await (await fetch(url('api', t1))).json();
+  let rep;
+  try {
+    rep = await (await fetch(url('api', t1))).json();
+  } catch (e) {
+    return; // abgebrochen, weil inzwischen neu gerendert wird (oder Server beendet)
+  }
   state.report = rep;
   showReport();
 }
@@ -236,6 +308,7 @@ function showReport() {
   renderFindings($('findings'), all);
   const c = { error: 0, warning: 0, info: 0 };
   for (const f of all) c[f.level]++;
+  setBadge($('badge-review'), c.error ? c.error : c.warning ? c.warning : '', c.error ? 'error' : c.warning ? 'warning' : '');
   $('counts').innerHTML = (c.error + c.warning + c.info === 0)
     ? '<span class="pill ok">Keine Befunde</span>'
     : Object.entries(c).filter(([, n]) => n).map(([k, n]) => `<span class="pill ${k}">${n} ${LEVEL_LABEL[k]}</span>`).join('');
@@ -774,11 +847,23 @@ async function activateModule(id) {
     }
     const def = modules.defs[id];
     const panel = document.createElement('section');
-    panel.className = 'module';
+    panel.className = 'module insp-panel';
     panel.dataset.module = id;
+    panel.id = 'insp-mod-' + id;
+    panel.setAttribute('role', 'tabpanel');
     $('modulePanels').appendChild(panel);
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.setAttribute('role', 'tab');
+    tab.dataset.insp = 'mod-' + id;
+    tab.dataset.module = id;
+    tab.setAttribute('aria-controls', panel.id);
+    tab.innerHTML = `${esc(def.tab || def.name)} <span class="tab-badge"></span>`;
+    $('inspTabs').insertBefore(tab, $('inspTabs').querySelector('[data-insp="theme"]'));
     def.panel = panel;
-    def.mount({ panel, api: window.KCEMU.api });
+    def.tabEl = tab;
+    def.mount({ panel, api: window.KCEMU.api, badge: (text, level) => setBadge(tab.querySelector('.tab-badge'), text, level) });
+    showInspector();
     modules.active.add(id);
     // Vorschau schon geladen (nicht das leere about:blank vor dem ersten Laden)
     const d = $('f1').contentDocument;
@@ -796,7 +881,9 @@ function deactivateModule(id) {
   modules.active.delete(id);
   try { def.unmount?.(); } catch (e) { console.error('Modul ' + id + ':', e); }
   def.panel?.remove();
+  def.tabEl?.remove();
   document.querySelector(`link[data-module="${id}"]`)?.remove();
+  showInspector();
 }
 
 async function setModule(id, change) {
@@ -842,6 +929,78 @@ function bindModules() {
       setModule(b.dataset.restore, { removed: false, enabled: true });
     }
   };
+}
+
+// ------------------------------------------------------------------ Darstellung und Inspektor
+
+const UI_KEY = 'kcemu-ui';
+
+/** Oberfläche: System / hell / dunkel – unabhängig von der Vorschau. */
+function bindAppearance() {
+  let current = '';
+  try { current = JSON.parse(localStorage.getItem(UI_KEY) || '{}').appearance || ''; } catch (e) { /* Voreinstellung */ }
+  const apply = (v) => {
+    if (v) document.documentElement.dataset.theme = v; else delete document.documentElement.dataset.theme;
+    for (const b of $('appearance').querySelectorAll('button')) b.setAttribute('aria-checked', String(b.dataset.appearance === v));
+    applyScheme(); // „Vorschau: System“ hängt nur vom System ab, nicht von der Oberfläche
+  };
+  apply(current);
+  $('appearance').onclick = (e) => {
+    const b = e.target.closest('button[data-appearance]');
+    if (!b) return;
+    try { localStorage.setItem(UI_KEY, JSON.stringify({ appearance: b.dataset.appearance })); } catch (err) { /* ohne Speicher weiter */ }
+    apply(b.dataset.appearance);
+  };
+  $('previewScheme').onclick = (e) => {
+    const b = e.target.closest('button[data-scheme]');
+    if (!b || b.dataset.scheme === state.scheme) return;
+    state.scheme = b.dataset.scheme;
+    persist();
+    render();
+  };
+  // Systemeinstellung ändert sich (z. B. automatisch am Abend) → „System“-Vorschau folgt
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (!state.scheme) render(); else applyScheme(); });
+}
+
+function setBadge(el, text, level) {
+  if (!el) return;
+  el.textContent = text === undefined || text === null ? '' : String(text);
+  el.className = 'tab-badge' + (level ? ' ' + level : '');
+  el.hidden = !el.textContent;
+}
+
+function showInspector() {
+  const tabs = [...$('inspTabs').querySelectorAll('[data-insp]')];
+  // gemerkter Reiter eines Moduls, das noch lädt: vorerst „Bewertung“ zeigen, Wahl aber behalten
+  const shown = tabs.some((t) => t.dataset.insp === state.insp) ? state.insp : 'review';
+  for (const t of tabs) {
+    const on = t.dataset.insp === shown;
+    t.setAttribute('aria-selected', String(on));
+    t.tabIndex = on ? 0 : -1;
+    const panel = $(t.getAttribute('aria-controls'));
+    if (panel) panel.hidden = !on;
+  }
+}
+
+function bindInspector() {
+  $('inspTabs').onclick = (e) => {
+    const t = e.target.closest('[data-insp]');
+    if (!t) return;
+    state.insp = t.dataset.insp;
+    persist();
+    showInspector();
+  };
+  $('inspTabs').onkeydown = (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const tabs = [...$('inspTabs').querySelectorAll('[data-insp]')];
+    const i = Math.max(0, tabs.findIndex((t) => t.getAttribute('aria-selected') === 'true'));
+    const n = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+    state.insp = n.dataset.insp;
+    persist();
+    showInspector();
+    n.focus();
+  };
+  showInspector();
 }
 
 // ------------------------------------------------------------------ Live-Neuladen

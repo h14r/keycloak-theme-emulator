@@ -31,11 +31,13 @@ const JPEG = { type: 'jpeg', quality: 82 };
   const checked = () => page.waitForFunction(() => /geprüft/.test(document.querySelector('.a11y-status')?.textContent || ''), null, { timeout: 60000 });
   const previewLoaded = () => page.waitForFunction(() => document.getElementById('f1').contentDocument?.readyState === 'complete', null, { timeout: 30000 });
 
-  // feste Ausgangslage: Desktop, an Breite angepasst, Symbole der Barrierefreiheit zunächst aus
+  // feste Ausgangslage: Desktop, an Breite angepasst, Oberfläche hell, Markierung der Barrierefreiheit zunächst aus
   await page.goto(BASE + '/?nowelcome');
   await page.evaluate(() => {
-    localStorage.setItem('kcemu', JSON.stringify({ mode: 'page', id: 'login', variant: 'standard', locale: '', width: 1280, zoom: 1, fit: true }));
-    localStorage.setItem('kcemu-a11y', JSON.stringify({ auto: true, icons: false, tab: 'summary', order: false }));
+    localStorage.clear();
+    localStorage.setItem('kcemu', JSON.stringify({ mode: 'page', id: 'login', variant: 'standard', locale: '', width: 1280, zoom: 1, fit: true, scheme: '', insp: 'review' }));
+    localStorage.setItem('kcemu-a11y', JSON.stringify({ auto: true, mark: false, scope: 'problems', tab: 'summary', order: false }));
+    localStorage.setItem('kcemu-ui', JSON.stringify({ appearance: 'light' }));
   });
   await page.goto(BASE + '/?nowelcome');
   await checked();
@@ -61,11 +63,13 @@ const JPEG = { type: 'jpeg', quality: 82 };
   await page.click('#themesClose');
 
   await page.click('#viewports button[data-w="375"]');
+  await page.click('#previewScheme button[data-scheme="dark"]');
   await page.check('#compare');
   await page.selectOption('#theme2', 'keycloak.v2');
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(2000);
   await shot('04-vergleich.jpg');
   await page.uncheck('#compare');
+  await page.click('#previewScheme button[data-scheme=""]');
   await page.click('#viewports button[data-w="1280"]');
 
   await page.click('#tabMails');
@@ -89,18 +93,29 @@ const JPEG = { type: 'jpeg', quality: 82 };
   await shotEl('06-pruefung.jpg', '#dlgAudit');
   await page.click('#auditClose');
 
-  await page.click('.module[data-module=a11y] [data-act=icons]');
-  await page.click('.module[data-module=a11y] [data-tab=details]');
-  await page.click('.module[data-module=a11y] .a11y-node >> nth=0');
+  // Barrierefreiheit: Registrierung in Mobilbreite, Fundstellen markiert, erste Fundstelle ausgewählt
+  const M = '.module[data-module=a11y]';
+  await page.click('#inspTabs [data-insp="mod-a11y"]');
+  await page.click('#list button[data-id="register"]');
+  await page.click('#viewports button[data-w="375"]');
+  await page.click('#zoomLevel');
+  await checked();
+  await page.check(`${M} [data-pref=mark]`);
+  await page.click(`${M} .a11y-finds li >> nth=0`);
+  await page.evaluate(() => { document.querySelector('.inspector').scrollTop = 0; });
   await shot('07-barrierefreiheit.jpg');
 
-  await page.click('.module[data-module=a11y] [data-tab=contrast]');
-  await page.click('.module[data-module=a11y] tr[data-contrast] >> nth=1');
-  await page.click('.module[data-module=a11y] [data-act=unselect]');
-  const box = await page.locator('.module[data-module=a11y]').boundingBox();
-  await shot('08-kontrast.jpg', { clip: { x: box.x - 8, y: box.y, width: box.width + 16, height: Math.min(box.height, 900 - box.y) } });
-  await page.click('.module[data-module=a11y] [data-tab=summary]');
-  await page.click('.module[data-module=a11y] [data-act=icons]');
+  await page.click(`${M} [data-act=unselect]`);
+  await page.click(`${M} [data-tab=contrast]`);
+  await page.click(`${M} tr[data-contrast] >> nth=0`);
+  await page.click(`${M} [data-act=unselect]`).catch(() => {});
+  const box = await page.locator('.inspector').boundingBox();
+  await shot('08-kontrast.jpg', { clip: { x: box.x, y: box.y, width: box.width, height: Math.min(box.height, 900 - box.y) } });
+  await page.click(`${M} [data-tab=summary]`);
+  await page.uncheck(`${M} [data-pref=mark]`);
+  await page.click('#inspTabs [data-insp="review"]');
+  await page.click('#viewports button[data-w="1280"]');
+  await page.click('#zoomFit');
 
   await page.click('#btnScenario');
   await shotEl('09-szenario.jpg', '#dlgScenario');

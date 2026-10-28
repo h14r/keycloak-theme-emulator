@@ -275,10 +275,34 @@ der Werkzeugleiste.
 
 ## Auf eine neue Version aktualisieren
 
-Ein Update ersetzt nur das Programm. **Eigene Themes und `scenario.json`
-bleiben erhalten**: Der Arbeitsordner `~/Keycloak Theme Emulator` (Windows:
-`C:\Users\<Name>\Keycloak Theme Emulator`) wird beim
-Start nur ergänzt, nie überschrieben.
+Ein Update ersetzt nur das Programm – **es bleibt immer genau eine Version
+installiert**, und **eigene Themes und Einstellungen werden übernommen**:
+
+- Der Arbeitsordner `~/Keycloak Theme Emulator` (Windows:
+  `C:\Users\<Name>\Keycloak Theme Emulator`) mit `themes/`, `scenario.json`,
+  `modules-state.json` und `ui-settings.json` gehört keiner Programmversion.
+  Er wird beim Start nur ergänzt, nie überschrieben.
+- Die Einstellungen der Oberfläche (Hell/Dunkel, Breite, Zoom, geöffnete
+  Reiter, Barrierefreiheit …) speichert der Browser und zusätzlich der
+  Emulator in `ui-settings.json`. Startet eine neue Version auf einem anderen
+  Port oder öffnet ein anderer Browser die Oberfläche, werden sie von dort
+  übernommen.
+- **Ältere Versionen werden entfernt:**
+  - *Mac:* `install-mac.sh` beendet einen laufenden Emulator und entfernt alle
+    Kopien der App in *Programme* und *~/Programme*, bevor es die neue
+    installiert. Wird die App per `.dmg` installiert, räumt die neue App beim
+    ersten Start auf: ältere oder doppelte Kopien in *Programme* und
+    *~/Programme* wandern in den Papierkorb. Das passiert nur, wenn die neue
+    App selbst installiert ist – nicht beim Ausprobieren direkt aus der
+    `.dmg`. Eine neuere Kopie wird nie entfernt; das Steuerfenster weist dann
+    darauf hin, dass die gestartete App veraltet ist.
+  - *Windows:* Der Installer ersetzt die installierte Version (gleicher
+    Upgrade-Code, kein Deinstallieren nötig). `install-windows.ps1` beendet
+    vorher einen laufenden Emulator und deinstalliert danach etwaige Reste
+    älterer Versionen.
+  - Beides prüft der Build bei jeder Version mit der zuletzt veröffentlichten
+    Vorversion: genau eine Installation, eigene Themes und Einstellungen
+    unverändert.
 
 - **Mac, per Terminal:** denselben Befehl wie bei der Installation erneut
   ausführen – er lädt die neueste Version und ersetzt die App:
@@ -380,9 +404,17 @@ Template-Cache sind aus, Änderungen am Theme sind beim nächsten Laden sichtbar
 
 ## Oberfläche
 
+Aufbau wie bei aktuellen Betriebssystemen: Titelleiste mit Werkzeugen, links
+die Seitenleiste, in der Mitte zwei Leisten (Inhalt, Ansicht) über der
+Vorschau, rechts der Inspektor mit Reitern (**Bewertung**, Module wie
+**Barrierefreiheit**, **Theme**). Bei schmalen Fenstern rückt der Inspektor
+unter die Vorschau.
+
+- **Oberfläche hell/dunkel**: die drei Symbole oben rechts – wie System, hell,
+  dunkel. Unabhängig von der Vorschau.
 - **Überblick** beim Start: kurze Einführung in die Funktionen der aktuellen
   Version mit Bildern aus der Anwendung. „Beim Start nicht mehr zeigen“ gilt
-  bis zur nächsten Version; der Knopf **Überblick** oben rechts öffnet ihn
+  bis zur nächsten Version; das **?** oben rechts öffnet ihn
   jederzeit wieder. Die Bilder erzeugt `packaging/screenshots.js` aus der
   laufenden Anwendung (siehe Kopf der Datei) – für eine neue Version einfach
   neu ausführen.
@@ -401,15 +433,24 @@ Template-Cache sind aus, Änderungen am Theme sind beim nächsten Laden sichtbar
   **Breite** passt die Vorschau an die Fensterbreite an (auch nebeneinander
   im Vergleich und beim Ändern der Fenstergröße). Tastatur: `+`, `−`, `0`,
   `F`. Zoom ändert nur die Darstellung, nicht das Layout der Seite.
+- **Vorschau System · Hell · Dunkel**: zeigt die Seite so, wie sie auf einem
+  Gerät im hellen bzw. dunklen Modus erscheint – unabhängig von der
+  Einstellung des eigenen Rechners. Bei „Hell“/„Dunkel“ fügt der Emulator
+  der Vorschau ein kleines Skript hinzu (`ui/preview-scheme.js`), das
+  `prefers-color-scheme` in `matchMedia`, CSS-`@media`-Regeln und
+  `media`-Attributen (z. B. `<picture><source>`) entsprechend beantwortet;
+  bei „System“ bleibt die Ausgabe von Keycloak unverändert. Gilt auch für
+  Mails und für Klicks innerhalb der Vorschau.
 - **Live-Neuladen**: Sobald sich eine Datei im Theme-Ordner ändert, wird die
   Vorschau neu erzeugt.
 - **Klicken in der Vorschau**: Sprachumschalter, „Registrieren“, „Passwort
   vergessen?“ führen zur passenden Seite. Abgeschickte Formulare zeigen die
   übermittelten Felder (gelb markierter Hinweis des Emulators – keine
   Keycloak-Ausgabe).
-- **Bewertung** (rechts): Befunde der Prüfungen, Theme-Kette mit den eigenen
-  Dateien, verfügbare Template-Variablen und abgefragte Textschlüssel;
-  darunter die Bereiche aktiver Module (z. B. Barrierefreiheit).
+- **Inspektor** (rechts): *Bewertung* mit den Befunden der Prüfungen, je ein
+  Reiter für aktive Module (z. B. *Barrierefreiheit*, mit Anzahl der
+  Fundstellen) und *Theme* mit der Theme-Kette, den eigenen Dateien,
+  Template-Variablen und abgefragten Textschlüsseln.
 - **Gesamtes Theme prüfen**: alle Varianten und Mails nacheinander, optional
   mit den Prüfungen aktiver Module; Ergebnis als Markdown-Bericht
   herunterladbar.
@@ -417,8 +458,12 @@ Template-Cache sind aus, Änderungen am Theme sind beim nächsten Laden sichtbar
 - **Szenario**: Realm-Schalter (Registrierung, „Angemeldet bleiben“, E-Mail
   als Benutzername …) und das vollständige Szenario als JSON bearbeiten.
 
-Bei Dark Mode folgt das Theme `keycloak.v2` der Einstellung des
-Betriebssystems bzw. Browsers – genau wie im Original.
+Bei „Vorschau: System“ folgt der Dark Mode von `keycloak.v2` der Einstellung
+des Betriebssystems bzw. Browsers – genau wie im Original.
+
+**Symbole:** App-Symbol, Favicons und Web-Manifest liegen in
+`src/main/resources/ui/icons/`, die Vorlagen und die Symbole für die
+Installer (`icon.icns` für macOS, `app.ico` für Windows) in `packaging/icons/`.
 
 ---
 
@@ -484,8 +529,14 @@ Prüfbibliothek **axe-core 4.11.3** (läuft lokal im Browser, Regeln mit den
 Tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`, `wcag22aa` sowie
 `best-practice`; deutsche Meldungstexte von axe-core).
 
-**Symbole auf der Seite** – wie bei WAVE in sechs Kategorien, einzeln
-ein-/ausblendbar. Ein Klick auf ein Symbol öffnet die Referenz dazu:
+**Fundstellen auf der Seite** – jede Fundstelle (Fehler, Kontrastfehler,
+Hinweis) wird in der Vorschau farbig eingerahmt und nummeriert; dieselben
+Nummern stehen im Inspektor in der Liste *Fundstellen auf der Seite*. Fahren
+über einen Listeneintrag hebt die Stelle hervor, ein Klick auf Nummer oder
+Eintrag zeigt die Referenz. **Auf der Seite markieren** schaltet die
+Markierung ein und aus; mit *alles (wie WAVE)* erscheinen zusätzlich Symbole
+für Merkmale, Struktur und ARIA. Die sechs Kategorien wie bei WAVE, einzeln
+ein-/ausblendbar:
 
 | Kategorie | Inhalt |
 |---|---|

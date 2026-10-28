@@ -103,19 +103,21 @@ final class DesktopApp {
         return 0;
     }
 
-    static void showWindow(String url, Path dir) {
+    static void showWindow(String url, Path dir, Installations.Report inst) {
         if (GraphicsEnvironment.isHeadless()) {
             return;
         }
         SwingUtilities.invokeLater(() -> {
             JFrame f = new JFrame("Keycloak Theme Emulator");
             f.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+            setIcons(f);
             JPanel p = new JPanel(new BorderLayout(0, 12));
             p.setBorder(BorderFactory.createEmptyBorder(16, 18, 16, 18));
             p.add(new JLabel("<html><b>Emulator läuft</b> – Version " + Checks.appVersion()
                     + " (Keycloak " + Checks.version() + ")<br>"
                     + url + "<br><br>Themes bearbeiten im Ordner:<br>" + dir.resolve("themes")
-                    + "<br><br>Fenster schließen beendet den Emulator.</html>"), BorderLayout.CENTER);
+                    + "<br><br>Fenster schließen beendet den Emulator."
+                    + installNotes(inst) + "</html>"), BorderLayout.CENTER);
             JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
             JButton open = new JButton("Im Browser öffnen");
             open.addActionListener(a -> browse(url));
@@ -133,6 +135,54 @@ final class DesktopApp {
             f.setVisible(true);
             f.getRootPane().setDefaultButton(open);
         });
+    }
+
+    private static String installNotes(Installations.Report r) {
+        if (r == null || r.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder("<br><br><b>Andere Installationen</b>");
+        for (String s : r.removed) {
+            sb.append("<br>entfernt (alte Version): ").append(html(s));
+        }
+        for (String s : r.failed) {
+            sb.append("<br>nicht entfernbar – bitte von Hand löschen: ").append(html(s));
+        }
+        for (String s : r.newer) {
+            sb.append("<br>neuere Version vorhanden – diese App ist veraltet: ").append(html(s));
+        }
+        return sb.append("<br>Themes und Einstellungen bleiben im Arbeitsordner erhalten.").toString();
+    }
+
+    private static String html(String s) {
+        return s.replace("&", "&amp;").replace("<", "&lt;");
+    }
+
+    /** App-Symbol für Fenster und Taskleiste (src/main/resources/icons). */
+    private static void setIcons(JFrame f) {
+        java.util.List<java.awt.Image> images = new java.util.ArrayList<>();
+        for (int size : new int[] {16, 24, 32, 48, 64, 128, 256}) {
+            try (InputStream in = DesktopApp.class.getResourceAsStream("/icons/icon-" + size + ".png")) {
+                if (in != null) {
+                    images.add(javax.imageio.ImageIO.read(in));
+                }
+            } catch (IOException e) {
+                // ohne dieses Symbol weiter
+            }
+        }
+        if (images.isEmpty()) {
+            return;
+        }
+        f.setIconImages(images);
+        // Dock/Taskleiste: Die installierte App bringt ihr Symbol selbst mit (.icns/.ico) – nur beim Start als JAR setzen
+        if (!isInstalledApp() && java.awt.Taskbar.isTaskbarSupported()
+                && java.awt.Taskbar.getTaskbar().isSupported(java.awt.Taskbar.Feature.ICON_IMAGE)) {
+            try {
+                java.awt.Taskbar.getTaskbar().setIconImage(images.get(images.size() - 1));
+            } catch (RuntimeException e) {
+                // nicht unterstützt
+            }
+        }
     }
 
     static void browse(String url) {
