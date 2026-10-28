@@ -306,6 +306,13 @@ Template-Cache sind aus, Änderungen am Theme sind beim nächsten Laden sichtbar
 - **Sprache**: automatisch (Accept-Language aus dem Szenario) oder fest –
   entspricht `?kc_locale=` bzw. bei Mails dem Profilattribut `locale`.
 - **Breite**: Mobil (375 px), Tablet (768 px), Desktop (1280 px), volle Breite.
+  Die Seite wird immer mit genau dieser Breite gerendert – so, wie sie ein
+  Browser dieser Größe zeigt.
+- **Zoom**: **−** / **+** verkleinern bzw. vergrößern die Darstellung
+  (25 %–300 %), ein Klick auf die Prozentzahl setzt auf 100 % zurück,
+  **Breite** passt die Vorschau an die Fensterbreite an (auch nebeneinander
+  im Vergleich und beim Ändern der Fenstergröße). Tastatur: `+`, `−`, `0`,
+  `F`. Zoom ändert nur die Darstellung, nicht das Layout der Seite.
 - **Live-Neuladen**: Sobald sich eine Datei im Theme-Ordner ändert, wird die
   Vorschau neu erzeugt.
 - **Klicken in der Vorschau**: Sprachumschalter, „Registrieren“, „Passwort

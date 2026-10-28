@@ -13,6 +13,9 @@ const state = {
   theme2: { page: 'keycloak.v2', mail: 'keycloak' },
   compare: false,
   width: 1280,
+  zoom: 1,
+  fit: true,
+  shownZoom: 1,
   part: 'html',
   stamp: 0,
   report: null,
@@ -41,7 +44,7 @@ async function init() {
 
 function persist() {
   try {
-    localStorage.setItem('kcemu', JSON.stringify({ mode: state.mode, id: state.id, variant: state.variant, locale: state.locale, width: state.width }));
+    localStorage.setItem('kcemu', JSON.stringify({ mode: state.mode, id: state.id, variant: state.variant, locale: state.locale, width: state.width, zoom: state.zoom, fit: state.fit }));
   } catch (e) { /* ohne Speicher weiter */ }
 }
 
@@ -51,6 +54,8 @@ function restore() {
     Object.assign(state, s);
   } catch (e) { /* ohne Speicher weiter */ }
   if (!isKnown(state.mode, state.id)) { state.mode = 'page'; state.id = 'login'; state.variant = 'standard'; }
+  if (!(state.zoom > 0)) state.zoom = 1;
+  if (typeof state.fit !== 'boolean') state.fit = true;
 }
 
 function isKnown(mode, id) {
@@ -135,13 +140,61 @@ function url(kind, theme) {
   return base + (state.mode === 'page' ? 'page/' : 'mail/') + encodeURIComponent(state.id) + '?' + p;
 }
 
+/** Zoomstufen für +/−; „Breite“ berechnet die Stufe frei aus der Fensterbreite. */
+const ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+
+/**
+ * Breite und Zoom der Vorschau(en) anwenden. Die Seite wird mit ihrer logischen Breite
+ * gerendert (Mobil 375, Tablet 768, Desktop 1280 bzw. „Voll“ = verfügbare Breite) und
+ * dann skaliert – das Layout ändert sich durch den Zoom also nicht.
+ */
 function applyWidth() {
+  let shown = state.zoom;
   for (const vp of [$('vp1'), $('vp2')]) {
+    if (vp.closest('[hidden]')) continue;
     const f = vp.querySelector('iframe');
-    f.style.width = state.width ? state.width + 'px' : '100%';
-    f.style.maxWidth = '100%';
+    const scaler = vp.querySelector('.scaler');
+    const availW = Math.max(200, vp.clientWidth - 2);
+    const availH = Math.max(300, vp.clientHeight - 2);
+    let z = state.zoom;
+    if (state.fit) z = state.width ? availW / state.width : 1;
+    z = Math.min(4, Math.max(0.1, z));
+    const w = state.width || Math.floor(availW / z);
+    const h = Math.floor(availH / z);
+    f.style.width = w + 'px';
+    f.style.height = h + 'px';
+    f.style.transform = z === 1 ? '' : `scale(${z})`;
+    scaler.style.width = Math.round(w * z) + 'px';
+    scaler.style.height = Math.round(h * z) + 'px';
+    if (vp.id === 'vp1') shown = z;
   }
+  state.shownZoom = shown;
+  $('zoomLevel').textContent = Math.round(shown * 100) + ' %';
+  $('zoomFit').classList.toggle('on', state.fit);
   for (const b of $('viewports').querySelectorAll('button')) b.classList.toggle('on', Number(b.dataset.w) === state.width);
+}
+
+function zoomStep(dir) {
+  const cur = state.shownZoom || state.zoom;
+  const next = dir > 0 ? ZOOM_STEPS.find((z) => z > cur + 0.001) : [...ZOOM_STEPS].reverse().find((z) => z < cur - 0.001);
+  if (next === undefined) return;
+  state.zoom = next;
+  state.fit = false;
+  persist();
+  applyWidth();
+}
+
+function zoomReset() {
+  state.zoom = 1;
+  state.fit = false;
+  persist();
+  applyWidth();
+}
+
+function zoomFit() {
+  state.fit = true;
+  persist();
+  applyWidth();
 }
 
 async function render() {
@@ -606,6 +659,22 @@ function bind() {
   $('theme2').onchange = (e) => { state.theme2[state.mode] = e.target.value; render(); };
   $('compare').onchange = (e) => { state.compare = e.target.checked; render(); };
   $('reload').onclick = render;
+  $('zoomIn').onclick = () => zoomStep(1);
+  $('zoomOut').onclick = () => zoomStep(-1);
+  $('zoomLevel').onclick = zoomReset;
+  $('zoomFit').onclick = zoomFit;
+  // Tastatur: + / − / 0 / F (nicht in Eingabefeldern und nicht bei gedrückter Strg-/Cmd-Taste)
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest('input, textarea, select, dialog[open]')) return;
+    if (e.key === '+' || e.key === '=') zoomStep(1);
+    else if (e.key === '-' || e.key === '−') zoomStep(-1);
+    else if (e.key === '0') zoomReset();
+    else if (e.key === 'f' || e.key === 'F') zoomFit();
+    else return;
+    e.preventDefault();
+  });
+  // Fensterbreite, Vergleichsansicht und Seitenleisten ändern den verfügbaren Platz
+  new ResizeObserver(() => applyWidth()).observe($('stage'));
   $('viewports').onclick = (e) => {
     const b = e.target.closest('button');
     if (!b) return;
