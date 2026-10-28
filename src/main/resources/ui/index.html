@@ -17,6 +17,7 @@
       <label class="switch" title="Lädt die Vorschau neu, sobald sich eine Datei im Theme-Ordner ändert">
         <input type="checkbox" id="liveReload" checked> Live-Neuladen
       </label>
+      <button type="button" id="btnThemes" title="Themes importieren und zum Testen auswählen">Themes</button>
       <button type="button" id="btnScenario">Szenario</button>
       <button type="button" id="btnAudit" class="primary">Gesamtes Theme prüfen</button>
     </div>
@@ -36,6 +37,7 @@
     <main class="main">
       <div class="toolbar">
         <label>Theme <select id="theme"></select></label>
+        <button type="button" id="btnThemes2" title="Neues Theme importieren oder auswählen" aria-label="Theme importieren oder auswählen">＋ Theme</button>
         <label id="variantWrap">Variante <select id="variant"></select></label>
         <label>Sprache <select id="locale"></select></label>
         <div class="seg small" id="viewports" role="group" aria-label="Bildschirmbreite">
@@ -114,6 +116,29 @@
       </div>
     </form>
   </dialog>
+
+  <dialog id="dlgThemes">
+    <div class="dlg wide">
+      <h2>Themes importieren und auswählen</h2>
+      <div class="dropzone" id="dropzone">
+        <strong>Theme hierher ziehen</strong>
+        <span class="muted small">Theme-Ordner (mit <code>login/</code> bzw. <code>email/</code>), ZIP oder Theme-JAR</span>
+        <div class="row">
+          <button type="button" id="pickFolder">Ordner wählen …</button>
+          <button type="button" id="pickZip">ZIP/JAR wählen …</button>
+        </div>
+        <input type="file" id="fileZip" accept=".zip,.jar" hidden>
+        <input type="file" id="fileFolder" webkitdirectory hidden>
+      </div>
+      <p id="importMsg" class="small" role="status"></p>
+      <label class="switch"><input type="checkbox" id="saveDefault"> Auswahl auch als Standard speichern (scenario.json)</label>
+      <table class="audit" id="themeTable"></table>
+      <p class="muted small" id="themesInfo"></p>
+      <div class="row end"><button type="button" id="themesClose">Schließen</button></div>
+    </div>
+  </dialog>
+
+  <div class="dropveil" id="dropveil" hidden><div>Theme loslassen zum Importieren</div></div>
 
   <dialog id="dlgAudit">
     <div class="dlg wide">

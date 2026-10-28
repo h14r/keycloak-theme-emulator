@@ -161,6 +161,12 @@ public final class Checks {
         }
     }
 
+    /** Version des Emulators selbst (aus dem Manifest der JAR-Datei). */
+    public static String appVersion() {
+        String v = Checks.class.getPackage().getImplementationVersion();
+        return v == null ? "dev" : v;
+    }
+
     public static String version() {
         String v = org.keycloak.common.Version.VERSION;
         return v == null ? "?" : v;

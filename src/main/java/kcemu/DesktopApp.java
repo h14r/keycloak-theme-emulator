@@ -112,7 +112,8 @@ final class DesktopApp {
             f.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
             JPanel p = new JPanel(new BorderLayout(0, 12));
             p.setBorder(BorderFactory.createEmptyBorder(16, 18, 16, 18));
-            p.add(new JLabel("<html><b>Emulator läuft</b> (Keycloak " + Checks.version() + ")<br>"
+            p.add(new JLabel("<html><b>Emulator läuft</b> – Version " + Checks.appVersion()
+                    + " (Keycloak " + Checks.version() + ")<br>"
                     + url + "<br><br>Themes bearbeiten im Ordner:<br>" + dir.resolve("themes")
                     + "<br><br>Fenster schließen beendet den Emulator.</html>"), BorderLayout.CENTER);
             JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));

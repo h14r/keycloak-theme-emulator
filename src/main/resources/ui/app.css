@@ -164,3 +164,16 @@ table.audit td.n { text-align: right; font-variant-numeric: tabular-nums; }
   .layout { grid-template-columns: 1fr; }
   .sidebar { border-right: 0; border-bottom: 1px solid var(--line); max-height: 40vh; }
 }
+
+.dropzone { border: 2px dashed var(--line); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; background: var(--bg); }
+.dropzone.over { border-color: var(--accent); background: var(--info-bg); }
+.dropveil { position: fixed; inset: 0; background: rgba(11, 92, 173, .18); border: 4px dashed var(--accent); display: flex; align-items: center; justify-content: center; z-index: 10; pointer-events: none; }
+.dropveil div { background: var(--surface); padding: 14px 22px; border-radius: 10px; font-weight: 600; }
+.tag { display: inline-block; font-size: 11px; border-radius: 4px; padding: 0 6px; margin-right: 4px; background: var(--surface-2); border: 1px solid var(--line); }
+.tag.on { background: var(--ok-bg); color: var(--ok); border-color: transparent; }
+#themeTable button { padding: 2px 8px; font-size: 12px; margin: 1px 2px; }
+#importMsg.error { color: var(--error); }
+#importMsg.ok { color: var(--ok); }
+dialog:has(.dlg.wide) { max-width: min(1100px, 95vw); }
+.dlg.wide { max-width: 100%; }
+#themeTable td:last-child { white-space: normal; min-width: 210px; }

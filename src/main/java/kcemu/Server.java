@@ -72,6 +72,8 @@ public class Server {
                 json(ex, 200, Map.of("stamp", stamp(emu.themesDir)));
             } else if (path.equals("/api/scenario")) {
                 scenario(ex);
+            } else if (path.equals("/api/themes") || path.startsWith("/api/themes/")) {
+                themes(ex, path.substring("/api/themes".length()));
             } else if (path.startsWith("/api/page/")) {
                 json(ex, 200, pageReport(path.substring("/api/page/".length()), query(ex)));
             } else if (path.startsWith("/api/mail/")) {
@@ -103,6 +105,7 @@ public class Server {
     private Map<String, Object> catalog() {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("keycloakVersion", Checks.version());
+        m.put("appVersion", Checks.appVersion());
         m.put("themesDir", emu.themesDir.getAbsolutePath());
         List<Map<String, Object>> pages = new ArrayList<>();
         for (LoginPages.Page p : LoginPages.PAGES.values()) {
@@ -158,6 +161,74 @@ public class Server {
             return;
         }
         text(ex, 405, "text/plain", "Methode nicht erlaubt");
+    }
+
+    // ---------------------------------------------------------------- Theme-Verwaltung
+
+    /**
+     * GET  /api/themes                    eigene Themes im Theme-Ordner
+     * POST /api/themes/import[?overwrite=1] ZIP/JAR oder Ordner importieren
+     * POST /api/themes/select             {"login": "...", "email": "...", "save": true}
+     * POST /api/themes/{name}/open        Ordner im Finder/Explorer öffnen
+     * DELETE /api/themes/{name}           Theme entfernen
+     */
+    private void themes(HttpExchange ex, String rest) throws IOException {
+        ThemeLibrary lib = new ThemeLibrary(emu.themesDir);
+        String method = ex.getRequestMethod();
+        if (rest.isEmpty() && "GET".equals(method)) {
+            json(ex, 200, Map.of("themesDir", emu.themesDir.getAbsolutePath(), "themes", lib.list()));
+            return;
+        }
+        if (rest.equals("/import") && "POST".equals(method)) {
+            com.fasterxml.jackson.databind.JsonNode req = Scenario.JSON.readTree(ex.getRequestBody().readAllBytes());
+            ThemeLibrary.ImportResult r;
+            try {
+                r = lib.importFrom(req, "1".equals(query(ex).get("overwrite")));
+            } catch (IllegalArgumentException | IOException e) {
+                json(ex, 400, Map.of("error", String.valueOf(e.getMessage())));
+                return;
+            }
+            if (!r.existing.isEmpty()) {
+                json(ex, 409, Map.of("existing", r.existing));
+                return;
+            }
+            json(ex, 200, Map.of("imported", r.imported, "warnings", r.warnings));
+            return;
+        }
+        if (rest.equals("/select") && "POST".equals(method)) {
+            com.fasterxml.jackson.databind.JsonNode req = Scenario.JSON.readTree(ex.getRequestBody().readAllBytes());
+            Scenario s = emu.scenario().copy();
+            if (req.hasNonNull("login")) {
+                s.loginTheme = req.get("login").asText();
+            }
+            if (req.hasNonNull("email")) {
+                s.emailTheme = req.get("email").asText();
+            }
+            emu.setScenario(s);
+            boolean saved = false;
+            if (req.path("save").asBoolean(false) && scenarioFile != null) {
+                Scenario.JSON.writeValue(scenarioFile, s);
+                saved = true;
+            }
+            json(ex, 200, Map.of("loginTheme", s.loginTheme, "emailTheme", s.emailTheme, "saved", saved));
+            return;
+        }
+        String name = rest.startsWith("/") ? rest.substring(1) : rest;
+        if (name.endsWith("/open") && "POST".equals(method)) {
+            File dir = lib.dirOf(name.substring(0, name.length() - "/open".length()));
+            boolean ok = dir != null && dir.isDirectory() && !java.awt.GraphicsEnvironment.isHeadless();
+            if (ok) {
+                DesktopApp.openFolder(dir.toPath());
+            }
+            json(ex, ok ? 200 : 501, Map.of("ok", ok, "path", dir == null ? "" : dir.getAbsolutePath()));
+            return;
+        }
+        if ("DELETE".equals(method) && !name.isEmpty() && !name.contains("/")) {
+            boolean ok = lib.delete(name);
+            json(ex, ok ? 200 : 404, Map.of("ok", ok));
+            return;
+        }
+        text(ex, 404, "text/plain", "Nicht gefunden");
     }
 
     // ---------------------------------------------------------------- Seiten

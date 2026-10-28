@@ -1,5 +1,20 @@
 # Changelog – Keycloak Theme Emulator
 
+## [1.1.0] – 2026-10-28
+
+Neue Themes schnell importieren und auswählen.
+
+- Theme per Drag & Drop auf das Fenster importieren – Ordner, ZIP oder
+  Theme-JAR (`META-INF/keycloak-themes.json`); auch mehrere Themes auf einmal
+- Dialog „Themes“ (Knopf „＋ Theme“ neben der Theme-Auswahl): Ordner bzw.
+  ZIP/JAR auswählen, Liste aller eigenen Themes mit Typen und Basis-Theme,
+  „Login testen“ / „E-Mails testen“, Ordner öffnen, Entfernen
+- importiertes Theme wird sofort ausgewählt und angezeigt; bei gleichem Namen
+  Rückfrage vor dem Ersetzen
+- Auswahl optional dauerhaft in `scenario.json` speichern
+- Programmversion in der Oberfläche, im Steuerfenster und beim Start sichtbar
+- Update-Anleitung: Programm wird ersetzt, eigene Themes und Szenario bleiben
+
 ## [1.0.0] – 2026-10-27
 
 Installierbare macOS-App.

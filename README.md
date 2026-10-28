@@ -15,6 +15,8 @@ festhalten.
 
 - [Installation auf dem Mac (.dmg)](#installation-auf-dem-mac-dmg)
 - [Ohne Installation im Browser (portables ZIP)](#ohne-installation-im-browser-portables-zip)
+- [Neue Themes importieren und auswählen](#neue-themes-importieren-und-auswählen)
+- [Auf eine neue Version aktualisieren](#auf-eine-neue-version-aktualisieren)
 - [Schnellstart](#schnellstart)
 - [So funktioniert es](#so-funktioniert-es)
 - [Was echt ist und was simuliert wird](#was-echt-ist-und-was-simuliert-wird)
@@ -152,6 +154,61 @@ Selbst bauen: `packaging/build-portable.sh` → `target/portable/*.zip`.
 Mit `java -jar target/keycloak-theme-emulator.jar --open` öffnet auch der
 normale Start (siehe [Schnellstart](#schnellstart)) die Oberfläche direkt
 im Browser.
+
+---
+
+## Neue Themes importieren und auswählen
+
+Ein neues Theme ist in wenigen Sekunden in der Vorschau:
+
+1. **Theme in das Fenster ziehen** – einen Theme-Ordner, ein ZIP oder ein
+   Theme-JAR einfach auf die Oberfläche fallen lassen. Alternativ
+   **„＋ Theme“** neben der Theme-Auswahl (oder **„Themes“** oben rechts) →
+   *Ordner wählen …* bzw. *ZIP/JAR wählen …*
+2. Der Emulator kopiert das Theme in den Theme-Ordner, prüft es und zeigt es
+   **sofort** an (Login-Seiten, bzw. E-Mails, wenn es nur ein E-Mail-Theme ist).
+
+Erkannt werden die üblichen Lieferformen:
+
+| Lieferform | Beispiel |
+|---|---|
+| Theme-Ordner | `mein-theme/login/theme.properties`, `mein-theme/email/…` |
+| ZIP mit Theme-Ordner | `mein-theme.zip` → `mein-theme/login/…` |
+| ZIP ohne äußeren Ordner | `mein-theme.zip` → `login/…` (Name = Dateiname) |
+| Theme-JAR (wie für `/opt/keycloak/providers`) | `META-INF/keycloak-themes.json` + `theme/<name>/<typ>/…` |
+| Ordner mit mehreren Themes | `themes/a/login/…`, `themes/b/email/…` |
+
+Gibt es ein Theme mit gleichem Namen schon, fragt der Emulator, ob es ersetzt
+werden soll. Systemdateien (`.DS_Store`, `__MACOSX`) werden übersprungen.
+
+Im Dialog **„Themes“** stehen alle eigenen Themes mit Typen und Basis-Theme:
+
+- **Login testen** / **E-Mails testen** – Theme auswählen und anzeigen,
+- **Ordner** – Theme-Ordner im Finder/Explorer öffnen (zum Bearbeiten),
+- **Entfernen** – Theme aus dem Theme-Ordner löschen (mit Rückfrage).
+
+Mit **„Auswahl auch als Standard speichern“** wird die Auswahl in
+`scenario.json` übernommen und gilt auch nach einem Neustart. Ohne Haken gilt
+sie bis zum Neustart. Für schnelle Wechsel genügt die Theme-Auswahl oben in
+der Werkzeugleiste.
+
+---
+
+## Auf eine neue Version aktualisieren
+
+Ein Update ersetzt nur das Programm. **Eigene Themes und `scenario.json`
+bleiben erhalten**: Der Arbeitsordner `~/Keycloak Theme Emulator` wird beim
+Start nur ergänzt, nie überschrieben.
+
+- **Mac, per Terminal:** denselben Befehl wie bei der Installation erneut
+  ausführen – er lädt die neueste Version und ersetzt die App:
+  `curl -fsSL https://raw.githubusercontent.com/h14r/keycloak-theme-emulator/main/install-mac.sh | bash`
+- **Mac, per `.dmg`:** Emulator beenden, neue `.dmg` öffnen und die App
+  erneut nach *Programme* ziehen → *Ersetzen*.
+- **Portables ZIP:** neues ZIP entpacken und die Ordner `themes/` sowie die
+  Datei `scenario.json` aus dem alten Ordner hineinkopieren.
+
+Welche Version läuft, steht oben links in der Oberfläche und im Steuerfenster der App; was sich geändert hat, in [CHANGELOG.md](./CHANGELOG.md).
 
 ---
 

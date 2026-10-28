@@ -26,13 +26,14 @@ const LEVEL_LABEL = { error: 'Fehler', warning: 'Warnungen', info: 'Hinweise' };
 async function init() {
   const cat = await (await fetch('/api/catalog')).json();
   state.catalog = cat;
-  $('kcVersion').textContent = 'Keycloak ' + cat.keycloakVersion;
+  $('kcVersion').textContent = 'Version ' + cat.appVersion + ' · Keycloak ' + cat.keycloakVersion;
   $('themesDir').textContent = 'Theme-Ordner: ' + cat.themesDir;
   state.theme.page = cat.scenario.loginTheme;
   state.theme.mail = cat.scenario.emailTheme;
   restore();
   fillLocales();
   bind();
+  bindThemes();
   showList();
   select(state.mode, state.id, state.variant);
   setInterval(pollStamp, 1500);
@@ -377,6 +378,205 @@ function downloadAudit() {
   a.download = `theme-pruefung-${state.theme.page}-${new Date().toISOString().slice(0, 10)}.md`;
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+// ------------------------------------------------------------------ Themes importieren und auswählen
+
+const MAX_IMPORT = 100 * 1024 * 1024;
+
+function b64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+function importMsg(text, kind) {
+  const m = $('importMsg');
+  m.textContent = text;
+  m.className = 'small ' + (kind || '');
+}
+
+async function refreshCatalog() {
+  state.catalog = await (await fetch('/api/catalog')).json();
+  fillThemes();
+}
+
+async function openThemes() {
+  if (!$('dlgThemes').open) $('dlgThemes').showModal();
+  const data = await (await fetch('/api/themes')).json();
+  $('themesInfo').textContent = 'Theme-Ordner: ' + data.themesDir + ' – Änderungen an den Dateien erscheinen sofort in der Vorschau.';
+  const rows = data.themes.map((t) => {
+    const has = (k) => Object.prototype.hasOwnProperty.call(t.types, k);
+    const parent = has('login') ? t.types.login.parent : has('email') ? t.types.email.parent : '';
+    const active = [state.theme.page === t.name && has('login') ? 'Login' : '', state.theme.mail === t.name && has('email') ? 'E-Mail' : '']
+      .filter(Boolean).join(', ');
+    return `<tr><td><strong>${esc(t.name)}</strong>${active ? `<div class="small muted">aktiv: ${esc(active)}</div>` : ''}</td>`
+      + `<td>${Object.keys(t.types).map((k) => `<span class="tag ${k === 'login' || k === 'email' ? 'on' : ''}">${esc(k)}</span>`).join('')}</td>`
+      + `<td class="small">${parent ? 'parent: ' + esc(parent) : ''}</td>`
+      + `<td class="small">${esc(new Date(t.modified).toLocaleString('de-DE'))}</td>`
+      + `<td>${has('login') ? `<button type="button" data-use="login" data-name="${esc(t.name)}">Login testen</button>` : ''}`
+      + `${has('email') ? `<button type="button" data-use="email" data-name="${esc(t.name)}">E-Mails testen</button>` : ''}`
+      + `<button type="button" data-open="${esc(t.name)}">Ordner</button>`
+      + `<button type="button" data-del="${esc(t.name)}">Entfernen</button></td></tr>`;
+  });
+  $('themeTable').innerHTML = '<tr><th>Theme</th><th>Typen</th><th>Basis</th><th>Geändert</th><th></th></tr>'
+    + (rows.join('') || '<tr><td colspan="5" class="muted">Noch keine eigenen Themes – oben einen Ordner, ein ZIP oder JAR hineinziehen.</td></tr>');
+}
+
+/** Theme für Login-Seiten bzw. E-Mails auswählen und sofort anzeigen. */
+async function useTheme(name, kind) {
+  const body = { save: $('saveDefault').checked };
+  body[kind] = name;
+  await fetch('/api/themes/select', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (kind === 'login') state.theme.page = name; else state.theme.mail = name;
+  await refreshCatalog();
+  const mode = kind === 'login' ? 'page' : 'mail';
+  if (state.mode !== mode) {
+    select(mode, mode === 'page' ? 'login' : state.catalog.mails[0].id, 'standard');
+  } else {
+    fillThemes();
+    render();
+  }
+}
+
+async function importPayload(payload, label, overwrite) {
+  importMsg(`Importiere ${label} …`);
+  const r = await fetch('/api/themes/import' + (overwrite ? '?overwrite=1' : ''), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+  const res = await r.json().catch(() => ({ error: 'Unerwartete Antwort (HTTP ' + r.status + ')' }));
+  if (r.status === 409) {
+    if (confirm(`Theme „${res.existing.join('“, „')}“ ist schon vorhanden. Ersetzen?\n(Die bisherigen Dateien dieses Themes werden gelöscht.)`)) {
+      return importPayload(payload, label, true);
+    }
+    importMsg('Import abgebrochen – vorhandenes Theme bleibt unverändert.');
+    return;
+  }
+  if (!r.ok) {
+    importMsg(res.error || 'Import fehlgeschlagen.', 'error');
+    return;
+  }
+  const names = res.imported.map((t) => `„${t.name}“ (${t.types.join(', ') || 'ohne Typ'}, ${t.files} Dateien)`);
+  importMsg('Importiert: ' + names.join(', ') + (res.warnings.length ? ' – ' + res.warnings.join(' ') : ''), 'ok');
+  await refreshCatalog();
+  await openThemes();
+  // das erste importierte Theme direkt anzeigen
+  const first = res.imported[0];
+  if (first && first.types.includes('login')) await useTheme(first.name, 'login');
+  else if (first && first.types.includes('email')) await useTheme(first.name, 'email');
+}
+
+async function importArchive(file) {
+  if (file.size > MAX_IMPORT) { importMsg('Datei ist größer als 100 MB.', 'error'); return; }
+  await importPayload({ archiveName: file.name, archive: b64(await file.arrayBuffer()) }, file.name);
+}
+
+/** files: [{path, file}] mit Pfaden relativ zum gewählten Ordner (inkl. Ordnername). */
+async function importFolder(folderName, files) {
+  const total = files.reduce((n, f) => n + f.file.size, 0);
+  if (total > MAX_IMPORT) { importMsg('Ordner ist größer als 100 MB.', 'error'); return; }
+  const out = [];
+  for (const f of files) out.push({ path: f.path, data: b64(await f.file.arrayBuffer()) });
+  await importPayload({ folderName, files: out }, `Ordner „${folderName}“`);
+}
+
+/** Ordner aus Drag & Drop rekursiv einlesen (FileSystemEntry-API). */
+function readEntry(entry, prefix, out) {
+  return new Promise((resolve) => {
+    if (entry.isFile) {
+      entry.file((file) => { out.push({ path: prefix + entry.name, file }); resolve(); }, () => resolve());
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      const all = [];
+      const next = () => reader.readEntries(async (batch) => {
+        if (!batch.length) {
+          for (const e of all) await readEntry(e, prefix + entry.name + '/', out);
+          resolve();
+        } else {
+          all.push(...batch);
+          next();
+        }
+      }, () => resolve());
+      next();
+    } else {
+      resolve();
+    }
+  });
+}
+
+/** entries/files müssen synchron im drop-Ereignis gelesen werden – danach ist das DataTransfer leer. */
+async function handleDrop(entries, fallbackFile) {
+  if (!entries.length) {
+    if (fallbackFile) await importArchive(fallbackFile);
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.isFile) {
+      if (/\.(zip|jar)$/i.test(entry.name)) {
+        await new Promise((res) => entry.file(async (f) => { await importArchive(f); res(); }, res));
+      } else {
+        importMsg(`„${entry.name}“ ist weder Ordner noch ZIP/JAR.`, 'error');
+      }
+    } else {
+      const files = [];
+      await readEntry(entry, '', files);
+      await importFolder(entry.name, files);
+    }
+  }
+}
+
+function bindThemes() {
+  $('btnThemes').onclick = openThemes;
+  $('btnThemes2').onclick = openThemes;
+  $('themesClose').onclick = () => $('dlgThemes').close();
+  $('pickZip').onclick = () => $('fileZip').click();
+  $('pickFolder').onclick = () => $('fileFolder').click();
+  $('fileZip').onchange = async (e) => { if (e.target.files[0]) await importArchive(e.target.files[0]); e.target.value = ''; };
+  $('fileFolder').onchange = async (e) => {
+    const files = [...e.target.files].map((f) => ({ path: f.webkitRelativePath || f.name, file: f }));
+    if (files.length) await importFolder(files[0].path.split('/')[0], files);
+    e.target.value = '';
+  };
+  $('themeTable').onclick = async (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.use) {
+      await useTheme(b.dataset.name, b.dataset.use);
+      $('dlgThemes').close();
+    } else if (b.dataset.open) {
+      const r = await fetch(`/api/themes/${encodeURIComponent(b.dataset.open)}/open`, { method: 'POST' });
+      const res = await r.json();
+      if (!res.ok) importMsg('Ordner: ' + res.path, '');
+    } else if (b.dataset.del) {
+      if (!confirm(`Theme „${b.dataset.del}“ mit allen Dateien aus dem Theme-Ordner löschen?`)) return;
+      await fetch(`/api/themes/${encodeURIComponent(b.dataset.del)}`, { method: 'DELETE' });
+      importMsg(`„${b.dataset.del}“ entfernt.`);
+      await refreshCatalog();
+      await openThemes();
+    }
+  };
+  // Drag & Drop: im Dialog auf die Fläche oder irgendwo auf das Fenster
+  const dz = $('dropzone');
+  let depth = 0;
+  const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+  window.addEventListener('dragenter', (e) => { if (hasFiles(e)) { depth++; $('dropveil').hidden = false; } });
+  window.addEventListener('dragleave', () => { depth = Math.max(0, depth - 1); if (!depth) $('dropveil').hidden = true; });
+  window.addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault(); });
+  window.addEventListener('drop', async (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    const dt = e.dataTransfer;
+    const entries = [...(dt.items || [])].map((i) => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+    const fallbackFile = dt.files && dt.files[0];
+    depth = 0;
+    $('dropveil').hidden = true;
+    dz.classList.remove('over');
+    await openThemes();
+    await handleDrop(entries, fallbackFile);
+  });
+  dz.addEventListener('dragover', () => dz.classList.add('over'));
+  dz.addEventListener('dragleave', () => dz.classList.remove('over'));
 }
 
 // ------------------------------------------------------------------ Live-Neuladen

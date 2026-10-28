@@ -76,7 +76,7 @@ public class Main {
             System.exit(CheckRun.run(emu, new Server(emu, scenario, host, 0), locale));
         }
         new Server(emu, scenario, host, port).start();
-        System.out.println("Keycloak Theme Emulator (Keycloak " + Checks.version() + ")");
+        System.out.println("Keycloak Theme Emulator " + Checks.appVersion() + " (Keycloak " + Checks.version() + ")");
         System.out.println("  Themes:   " + themes.getAbsolutePath());
         System.out.println("  Szenario: " + (scenario.isFile() ? scenario.getAbsolutePath() : "Voreinstellung (" + scenario.getName() + " fehlt)"));
         System.out.println("  Oberfläche: " + base);
