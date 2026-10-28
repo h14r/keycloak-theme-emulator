@@ -1,5 +1,19 @@
 # Changelog – Keycloak Theme Emulator
 
+## [1.2.0] – 2026-10-28
+
+Zoom und Anpassen an die Fensterbreite.
+
+- Zoom-Leiste neben der Breitenauswahl: **−** / **+** (25 %–300 %), Klick
+  auf die Prozentzahl = 100 %, **Breite** = an die Fensterbreite anpassen;
+  Tastatur `+`, `−`, `0`, `F`; Einstellung wird gemerkt
+- „Breite“ ist die Voreinstellung und passt sich bei Fenstergröße und
+  Vergleichsansicht automatisch an
+- Korrektur: Bisher wurde z. B. die Desktop-Vorschau (1280 px) in ein
+  schmaleres Fenster gestaucht, wodurch die Seite intern mit kleinerer Breite
+  gerendert wurde. Jetzt rendert sie immer mit der gewählten Breite und wird
+  nur skaliert dargestellt.
+
 ## [1.1.0] – 2026-10-28
 
 Neue Themes schnell importieren und auswählen.

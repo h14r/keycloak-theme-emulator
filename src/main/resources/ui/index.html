@@ -46,6 +46,12 @@
           <button type="button" data-w="1280" class="on">Desktop</button>
           <button type="button" data-w="0">Voll</button>
         </div>
+        <div class="seg small" id="zoom" role="group" aria-label="Zoom">
+          <button type="button" id="zoomOut" title="Verkleinern (Taste −)" aria-label="Verkleinern">−</button>
+          <button type="button" id="zoomLevel" title="Auf 100 % zurücksetzen (Taste 0)" aria-label="Zoomstufe, klicken für 100 %">100 %</button>
+          <button type="button" id="zoomIn" title="Vergrößern (Taste +)" aria-label="Vergrößern">+</button>
+          <button type="button" id="zoomFit" title="An die Fensterbreite anpassen (Taste F)">Breite</button>
+        </div>
         <label class="switch"><input type="checkbox" id="compare"> Vergleich mit</label>
         <select id="theme2" disabled></select>
         <button type="button" id="reload" title="Neu rendern">↻</button>
@@ -68,11 +74,11 @@
       <div class="stage" id="stage">
         <figure class="frame">
           <figcaption id="cap1"></figcaption>
-          <div class="viewport" id="vp1"><iframe id="f1" title="Vorschau"></iframe></div>
+          <div class="viewport" id="vp1"><div class="scaler"><iframe id="f1" title="Vorschau"></iframe></div></div>
         </figure>
         <figure class="frame" id="frame2" hidden>
           <figcaption id="cap2"></figcaption>
-          <div class="viewport" id="vp2"><iframe id="f2" title="Vergleichsvorschau"></iframe></div>
+          <div class="viewport" id="vp2"><div class="scaler"><iframe id="f2" title="Vergleichsvorschau"></iframe></div></div>
         </figure>
       </div>
     </main>
